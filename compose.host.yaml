@@ -1,14 +1,16 @@
 # Host networking (Linux): the container shares the host's network stack, so probes, the Egress
 # page, and the Host page's interfaces, routes, and DNS all describe the host itself.
 #
-#   docker compose -f compose.host.yaml up -d --build
+#   docker compose -f compose.host.yaml pull && docker compose -f compose.host.yaml up -d
+#   (or `up -d --build` to build from this checkout)
 #
 # The port is set with NETPROBE_PORT, since nothing is published. Docker Desktop on macOS and
 # Windows runs containers in a VM, where host networking means the VM's network, not yours.
 services:
   netprobe:
+    # Prebuilt multi-arch image from CI; `up --build` builds from this checkout instead.
+    image: ${NETPROBE_IMAGE:-ghcr.io/lennondotw/netprobe:latest}
     build: .
-    image: netprobe:latest
     init: true
     restart: unless-stopped
     network_mode: host

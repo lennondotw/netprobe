@@ -1,11 +1,12 @@
 # Bridge networking: portable, works with Docker Desktop. Traffic leaves through Docker's NAT, so
 # on Linux prefer compose.host.yaml when you want measurements identical to the host's.
 #
-#   docker compose up -d --build
+#   docker compose pull && docker compose up -d     (or `up -d --build` to build locally)
 services:
   netprobe:
+    # Prebuilt multi-arch image from CI; `up --build` builds from this checkout instead.
+    image: ${NETPROBE_IMAGE:-ghcr.io/lennondotw/netprobe:latest}
     build: .
-    image: netprobe:latest
     init: true
     restart: unless-stopped
     ports:
