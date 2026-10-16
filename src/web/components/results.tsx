@@ -530,56 +530,82 @@ const outcomeTone: Record<Attempt['outcome'], Tone> = {
   transferred: 'success',
 }
 
-const AttemptsTable = ({ attempts, label }: { attempts: readonly Attempt[]; label: string }) => (
-  <div className='-mx-5 border-y border-line'>
-    <DataTable
-      columns={[
-        { id: 'seq', header: '#', className: 'text-faint tabular-nums', cell: (a) => a.seq },
-        {
-          id: 'outcome',
-          header: 'Result',
-          cell: (a) => (
-            <span className='flex items-center gap-1.5'>
-              <StatusDot tone={outcomeTone[a.outcome]} />
-              {a.errorKind
-                ? describeError(a.errorKind, a.phase)
-                : a.outcome === 'transferred'
-                  ? 'Transferred'
-                  : 'OK'}
-            </span>
-          ),
-        },
-        { id: 'status', header: 'HTTP', className: num, cell: (a) => a.httpStatus ?? '—' },
-        {
-          id: 'detail',
-          header: 'Detail',
-          className: 'font-mono text-[11.5px] text-muted',
-          cell: (a) => a.detail ?? '—',
-        },
-        {
-          id: 'ip',
-          header: 'Remote',
-          className: 'font-mono text-[11.5px] text-muted',
-          cell: (a) => a.remoteIp ?? '—',
-        },
-        { id: 'dns', header: 'DNS', className: num, cell: (a) => formatMs(a.phases.dns) },
-        { id: 'tcp', header: 'TCP', className: num, cell: (a) => formatMs(a.phases.tcp) },
-        { id: 'tls', header: 'TLS', className: num, cell: (a) => formatMs(a.phases.tls) },
-        { id: 'ttfb', header: 'TTFB', className: num, cell: (a) => formatMs(a.phases.ttfb) },
-        {
-          id: 'total',
-          header: 'Total',
-          className: `${num} text-foreground`,
-          cell: (a) => formatMs(a.totalMs),
-        },
-      ]}
-      empty={<p className='px-5 py-3 text-[12.5px] text-muted'>No attempts yet.</p>}
-      getRowId={(a) => String(a.seq)}
-      label={label}
-      rows={attempts}
-    />
-  </div>
-)
+/**
+ * Every attempt column, with the value it shows. Columns that are empty for every attempt (no
+ * detail, no HTTP status for a socket probe, …) are dropped so the table fits the dialog.
+ */
+const AttemptsTable = ({ attempts, label }: { attempts: readonly Attempt[]; label: string }) => {
+  const present = (value: (a: Attempt) => unknown) => attempts.some((a) => value(a) != null)
+  const optional: Record<string, (a: Attempt) => unknown> = {
+    status: (a) => a.httpStatus,
+    detail: (a) => a.detail,
+    ip: (a) => a.remoteIp,
+    dns: (a) => a.phases.dns,
+    tcp: (a) => a.phases.tcp,
+    tls: (a) => a.phases.tls,
+    ttfb: (a) => a.phases.ttfb,
+  }
+  const columns: DataTableColumn<Attempt>[] = (
+    [
+      { id: 'seq', header: '#', className: 'text-faint tabular-nums', cell: (a) => a.seq },
+      {
+        id: 'outcome',
+        header: 'Result',
+        cell: (a) => (
+          <span className='flex items-center gap-1.5'>
+            <StatusDot tone={outcomeTone[a.outcome]} />
+            {a.errorKind
+              ? describeError(a.errorKind, a.phase)
+              : a.outcome === 'transferred'
+                ? 'Transferred'
+                : 'OK'}
+          </span>
+        ),
+      },
+      { id: 'status', header: 'HTTP', className: num, cell: (a) => a.httpStatus ?? '—' },
+      {
+        id: 'detail',
+        header: 'Detail',
+        className: 'font-mono text-[11.5px] text-muted',
+        cell: (a) => a.detail ?? '—',
+      },
+      {
+        id: 'ip',
+        header: 'Remote',
+        className: 'font-mono text-[11.5px] text-muted',
+        cell: (a) => (
+          <span className='block max-w-48 truncate' title={a.remoteIp ?? undefined}>
+            {a.remoteIp ?? '—'}
+          </span>
+        ),
+      },
+      { id: 'dns', header: 'DNS', className: num, cell: (a) => formatMs(a.phases.dns) },
+      { id: 'tcp', header: 'TCP', className: num, cell: (a) => formatMs(a.phases.tcp) },
+      { id: 'tls', header: 'TLS', className: num, cell: (a) => formatMs(a.phases.tls) },
+      { id: 'ttfb', header: 'TTFB', className: num, cell: (a) => formatMs(a.phases.ttfb) },
+      {
+        id: 'total',
+        header: 'Total',
+        className: `${num} text-foreground`,
+        cell: (a) => formatMs(a.totalMs),
+      },
+    ] satisfies DataTableColumn<Attempt>[]
+  ).filter((column) => {
+    const value = optional[column.id]
+    return value === undefined || present(value)
+  })
+  return (
+    <div className='-mx-5 border-y border-line'>
+      <DataTable
+        columns={columns}
+        empty={<p className='px-5 py-3 text-[12.5px] text-muted'>No attempts yet.</p>}
+        getRowId={(a) => String(a.seq)}
+        label={label}
+        rows={attempts}
+      />
+    </div>
+  )
+}
 
 const TargetDetail = ({ row }: { row: Row }) => {
   const { target, entry } = row

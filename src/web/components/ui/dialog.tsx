@@ -26,7 +26,7 @@ export const DetailDialog = ({ children, meta, onOpenChange, open, title }: Deta
         <Dialog.Popup
           initialFocus={popupRef}
           ref={popupRef}
-          className='fixed top-1/2 left-1/2 z-50 flex max-h-[min(85vh,52rem)] w-[min(calc(100vw-2rem),44rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-[0_24px_48px_-12px_rgb(0_0_0/0.25)] transition-[opacity,scale] duration-150 ease-[cubic-bezier(0.2,0,0,1)] outline-none data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[ending-style]:duration-100 data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0'
+          className='fixed top-1/2 left-1/2 z-50 flex max-h-[min(85vh,52rem)] w-[min(calc(100vw-2rem),60rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-[0_24px_48px_-12px_rgb(0_0_0/0.25)] transition-[opacity,scale] duration-150 ease-[cubic-bezier(0.2,0,0,1)] outline-none data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[ending-style]:duration-100 data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0'
         >
           <header className='flex min-h-12 shrink-0 items-center gap-3 border-b border-line px-5'>
             <Dialog.Title className='min-w-0 truncate font-mono text-[13px] font-medium'>
