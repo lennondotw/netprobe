@@ -23,6 +23,7 @@ import { DataTable, type DataTableColumn, type DataTableGroup } from './ui/data-
 import { DetailDialog, DetailSection, useDetailDialog } from './ui/dialog.tsx'
 import { Checkbox } from './ui/inputs.tsx'
 import { Row, SectionLabel } from './ui/list.tsx'
+import { InfoHint } from './ui/tooltip.tsx'
 
 export interface ResultEntry {
   result: TargetResult
@@ -125,6 +126,43 @@ const KindTag = ({ kind }: { kind: ProbeKind }) => (
 
 const hasFakeIp = (detail: string) => detail.split(/[\s,]+/).some(isFakeIp)
 
+/**
+ * Fake-IP proxies hand out 198.18.0.0/15 addresses from their own DNS and terminate connections
+ * locally. The hint explains what that does to this row's numbers.
+ */
+const FakeIpHint = ({
+  target,
+  result,
+}: {
+  target: TargetInfo
+  result: TargetResult | undefined
+}) => {
+  const summary = result?.summary
+  if (!summary) return null
+  const fakeAnswers = summary.details.filter(hasFakeIp)
+  const fakeRemote = summary.remoteIps.filter(isFakeIp)
+  if (fakeAnswers.length === 0 && fakeRemote.length === 0) return null
+
+  const explanation =
+    target.kind === 'dns' || target.kind === 'dot'
+      ? 'The resolver answered with a fake IP, so queries to it are intercepted by a local proxy before they leave this machine.'
+      : target.kind === 'http'
+        ? 'This name resolved to a fake IP. A local proxy answers DNS and terminates TCP, so DNS and TCP times describe that proxy; TLS and TTFB still include the real path.'
+        : 'This name resolved to a fake IP, so the probe reached a local proxy rather than the remote host.'
+
+  return (
+    <InfoHint label='Fake-IP address'>
+      <span className='grid max-w-72 gap-1'>
+        <span className='font-medium text-foreground'>Fake IP (198.18.0.0/15)</span>
+        <span className='font-mono text-[11.5px]'>
+          {[...fakeRemote, ...fakeAnswers].join(', ')}
+        </span>
+        <span className='text-muted'>{explanation}</span>
+      </span>
+    </InfoHint>
+  )
+}
+
 /** The most common failure, or for healthy probes the detail they reported (mapped address, answer). */
 const DetailCell = ({ result }: { result: TargetResult | undefined }) => {
   const error = topErrorOf(result)
@@ -132,11 +170,7 @@ const DetailCell = ({ result }: { result: TargetResult | undefined }) => {
     const detail = result?.summary?.details[0]
     if (!detail) return <span className='text-faint'>—</span>
     return (
-      <span
-        className={`block max-w-56 truncate font-mono text-[11.5px] ${hasFakeIp(detail) ? 'text-warning' : 'text-muted'}`}
-      >
-        {detail}
-      </span>
+      <span className='block max-w-56 truncate font-mono text-[11.5px] text-muted'>{detail}</span>
     )
   }
   return (
@@ -177,13 +211,14 @@ const columnsFor = (mode: RunMode, scale: number): DataTableColumn<Row>[] => {
     id: 'target',
     header: 'Target',
     primary: true,
-    cell: ({ target }) => (
+    cell: ({ target, entry }) => (
       <span className='flex min-w-0 items-baseline gap-2'>
         <span className='font-medium text-foreground'>{target.name}</span>
         {target.kind !== 'http' && <KindTag kind={target.kind} />}
         <span className='max-w-56 truncate font-mono text-[11.5px] text-faint'>
           {hostOf(target.url)}
         </span>
+        <FakeIpHint result={entry?.result} target={target} />
       </span>
     ),
   }
@@ -224,9 +259,6 @@ const columnsFor = (mode: RunMode, scale: number): DataTableColumn<Row>[] => {
               {d}
             </span>
           ))}
-          {details.some(hasFakeIp) && (
-            <span className='text-warning'>Fake-IP answer: DNS is intercepted locally</span>
-          )}
         </div>
       )
     },
@@ -562,7 +594,7 @@ const TargetDetail = ({ row }: { row: Row }) => {
             <Row label='Remote IPs'>
               <span className='font-mono text-[11.5px]'>{result.summary.remoteIps.join(', ')}</span>
               {result.summary.remoteIps.some(isFakeIp) && (
-                <span className='block text-[11.5px] text-warning'>
+                <span className='block text-[11.5px] text-muted'>
                   Fake-IP range: answered by a local proxy
                 </span>
               )}

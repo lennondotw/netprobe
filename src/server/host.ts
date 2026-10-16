@@ -15,7 +15,14 @@ import {
   version,
 } from 'node:os'
 
-import type { HostInfo, HostInterface, HostProxySetting, RuntimeInfo } from '../shared/types.ts'
+import type {
+  HostInfo,
+  HostInterface,
+  HostProxySetting,
+  MacNetworkInfo,
+  MacResolver,
+  RuntimeInfo,
+} from '../shared/types.ts'
 import { redactProxy } from './redact.ts'
 
 const darwin = platform() === 'darwin'
@@ -237,6 +244,99 @@ const environmentProxy = (): HostProxySetting[] =>
       value: /^no_proxy$/i.test(key) ? value! : /:\/\//.test(value!) ? redactProxy(value!) : value!,
     }))
 
+/** Every resolver mDNSResponder knows about, from both sections of `scutil --dns`. */
+const parseResolvers = (out: string): MacResolver[] => {
+  const [main = '', scoped = ''] = out.split('DNS configuration (for scoped queries)')
+  const parseSection = (text: string, isScoped: boolean) =>
+    text
+      .split(/\n(?=resolver #\d+)/)
+      .filter((block) => block.startsWith('resolver #'))
+      .map((block): MacResolver => {
+        const field = (name: string) =>
+          new RegExp(`^\\s*${name}\\s*:\\s*(.+)$`, 'm').exec(block)?.[1]?.trim()
+        const domain = field('domain') ?? null
+        const reach = field('reach')
+        return {
+          kind: isScoped ? 'scoped' : domain ? 'domain' : 'default',
+          domain,
+          nameservers: [...block.matchAll(/nameserver\[\d+\]\s*:\s*(\S+)/g)].map((m) => m[1]!),
+          interface: /if_index\s*:\s*\d+\s*\(([^)]+)\)/.exec(block)?.[1] ?? null,
+          mdns: /options\s*:.*\bmdns\b/.test(block),
+          order: field('order') ? Number(field('order')) : null,
+          reachable: reach ? !/Not Reachable/.test(reach) : null,
+        }
+      })
+  return [...parseSection(main, false), ...parseSection(scoped, true)]
+}
+
+const extensionCategories: Record<string, string> = {
+  network_extension: 'Network',
+  endpoint_security_extension: 'Endpoint security',
+  driver_extension: 'Driver',
+}
+
+const parseSystemExtensions = (out: string): MacNetworkInfo['systemExtensions'] => {
+  const extensions: MacNetworkInfo['systemExtensions'] = []
+  let category = 'Other'
+  for (const line of out.split('\n')) {
+    const section = /^--- com\.apple\.system_extension\.(\S+)/.exec(line)
+    if (section) {
+      category = extensionCategories[section[1]!] ?? section[1]!
+      continue
+    }
+    const row = /^(\*?)\t(\*?)\t(\S+)\t(\S+) \(([^)]*)\)\t(.+?)\t\[(.+)\]$/.exec(line)
+    if (row) {
+      extensions.push({
+        enabled: row[1] === '*',
+        bundleId: row[4]!,
+        version: row[5]!,
+        name: row[6]!,
+        state: row[7]!,
+        category,
+      })
+    }
+  }
+  return extensions
+}
+
+const parseVpnServices = (out: string): MacNetworkInfo['vpnServices'] =>
+  out
+    .split('\n')
+    .map((line) => /^(\*?)\s*\(([^)]+)\)\s+\S+\s+(\S+)\s+(?:\(([^)]+)\)\s+)?"([^"]+)"/.exec(line))
+    .filter((m): m is RegExpExecArray => m !== null)
+    .map((m) => ({
+      enabled: m[1] === '*',
+      status: m[2]!,
+      type: m[3]!,
+      provider: m[4] ?? null,
+      name: m[5]!,
+    }))
+
+const parseServiceOrder = (out: string) =>
+  [...out.matchAll(/^\((\d+|\*)\)\s+(.+)$/gm)].map((m) => ({
+    name: m[2]!.trim(),
+    enabled: m[1] !== '*',
+  }))
+
+const macNetwork = async (): Promise<MacNetworkInfo> => {
+  const [dns, extensions, vpn, order, localHostName, computerName] = await Promise.all([
+    run('scutil', ['--dns']),
+    run('systemextensionsctl', ['list']),
+    run('scutil', ['--nc', 'list']),
+    run('networksetup', ['-listnetworkserviceorder']),
+    run('scutil', ['--get', 'LocalHostName']),
+    run('scutil', ['--get', 'ComputerName']),
+  ])
+  return {
+    localHostName: localHostName?.trim() || null,
+    computerName: computerName?.trim() || null,
+    serviceOrder: parseServiceOrder(order ?? ''),
+    resolvers: parseResolvers(dns ?? ''),
+    systemExtensions: parseSystemExtensions(extensions ?? ''),
+    vpnServices: parseVpnServices(vpn ?? ''),
+  }
+}
+
 /**
  * Collect a snapshot of the host. Every collector is independent and best-effort: a missing tool
  * or unsupported platform leaves that part empty and is listed in `unavailable`.
@@ -252,7 +352,7 @@ export const collectHostInfo = async (runtime: RuntimeInfo): Promise<HostInfo> =
     }
   }
 
-  const [os, model, ifaces, routes, dns, resolver, sysProxy, features] = await Promise.all([
+  const [os, model, ifaces, routes, dns, resolver, sysProxy, features, macos] = await Promise.all([
     guard('OS version', `${platform()} ${release()}`, osName),
     guard('Device model', null, deviceModel),
     guard('Interfaces', [], interfaces),
@@ -264,6 +364,7 @@ export const collectHostInfo = async (runtime: RuntimeInfo): Promise<HostInfo> =
       const out = (await run('curl', ['--version'])) ?? ''
       return /^Features:\s*(.+)$/m.exec(out)?.[1]?.trim().split(/\s+/) ?? []
     }),
+    darwin ? guard('macOS network details', null, macNetwork) : Promise.resolve(null),
   ])
 
   if (routes.length === 0) unavailable.push('Default routes')
@@ -297,6 +398,7 @@ export const collectHostInfo = async (runtime: RuntimeInfo): Promise<HostInfo> =
     },
     proxy: { system: sysProxy, environment: environmentProxy() },
     interfaces: ifaces,
+    macos,
     unavailable: [...new Set(unavailable)],
   }
 }

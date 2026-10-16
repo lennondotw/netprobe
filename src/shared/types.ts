@@ -292,6 +292,45 @@ export interface HostInfo {
     environment: HostProxySetting[]
   }
   interfaces: HostInterface[]
+  /** macOS-only: the mDNSResponder resolver stack, Bonjour names, and Network Extensions. */
+  macos: MacNetworkInfo | null
   /** Collectors that failed or are not supported on this platform. */
   unavailable: string[]
+}
+
+export interface MacResolver {
+  /** `default` serves ordinary lookups; `domain` resolvers handle one suffix; `scoped` bind to an interface. */
+  kind: 'default' | 'domain' | 'scoped'
+  domain: string | null
+  nameservers: string[]
+  interface: string | null
+  /** Resolved by multicast DNS (Bonjour) rather than a server. */
+  mdns: boolean
+  order: number | null
+  reachable: boolean | null
+}
+
+export interface MacNetworkInfo {
+  /** Bonjour name; the machine answers to `<localHostName>.local` on the LAN. */
+  localHostName: string | null
+  computerName: string | null
+  /** Network services in priority order, as System Settings lists them. */
+  serviceOrder: { name: string; enabled: boolean }[]
+  resolvers: MacResolver[]
+  systemExtensions: {
+    name: string
+    bundleId: string
+    version: string
+    category: string
+    state: string
+    enabled: boolean
+  }[]
+  /** VPN and Network Extension configurations (packet tunnels, proxies) and their status. */
+  vpnServices: {
+    name: string
+    provider: string | null
+    type: string
+    status: string
+    enabled: boolean
+  }[]
 }

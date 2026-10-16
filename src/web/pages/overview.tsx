@@ -9,7 +9,7 @@ import { Segmented, Select, TabBar } from '../components/ui/inputs.tsx'
 import { MetaList, PageHeader, Toolbar } from '../components/ui/page-header.tsx'
 import { ListSkeleton } from '../components/ui/skeleton.tsx'
 import { cancelRun, queryKeys, startRun, useConfig, useLatest } from '../lib/api.ts'
-import { formatBytes, formatRelative, isFakeIp } from '../lib/format.ts'
+import { formatBytes, formatRelative } from '../lib/format.ts'
 import { useRunStream } from '../lib/use-run-stream.ts'
 
 const modes = [
@@ -56,9 +56,6 @@ const isEligible = (target: TargetInfo, mode: RunMode, viaProxy: boolean) => {
   if (target.download) return false
   return target.kind === 'http' || !viaProxy
 }
-
-const hasFakeIp = (values: readonly string[]) =>
-  values.some((value) => value.split(/[\s,]+/).some(isFakeIp))
 
 const Overview = ({ config, latest }: { config: AppConfig; latest: readonly LatestResult[] }) => {
   const queryClient = useQueryClient()
@@ -156,12 +153,6 @@ const Overview = ({ config, latest }: { config: AppConfig; latest: readonly Late
     },
     { bytes: 0, unknown: 0 },
   )
-
-  const fakeIpTargets = [...results.values()].filter(
-    (entry) =>
-      hasFakeIp(entry.result.summary?.remoteIps ?? []) ||
-      hasFakeIp(entry.result.summary?.details ?? []),
-  ).length
 
   const egressOptions = config.egress.map((e) => ({
     value: e.id,
@@ -277,16 +268,6 @@ const Overview = ({ config, latest }: { config: AppConfig; latest: readonly Late
           Docker on macOS and Windows routes traffic through an extra VM and NAT layer, and
           host-level proxies or TUN interfaces may not apply. Compare with a run on the host before
           drawing conclusions about CI jobs.
-        </Callout>
-      )}
-      {fakeIpTargets > 0 && (
-        <Callout
-          title={`${fakeIpTargets} targets resolved to fake IPs (198.18.0.0/15)`}
-          tone='warning'
-        >
-          A local proxy or TUN interface is answering DNS and terminating TCP on this machine, so
-          DNS and TCP times describe that proxy rather than the remote service. TLS and TTFB still
-          include the real path.
         </Callout>
       )}
       {start.error && (

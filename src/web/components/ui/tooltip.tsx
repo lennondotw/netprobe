@@ -8,7 +8,7 @@ import { type ReactElement, type ReactNode, useRef, useState } from 'react'
 const handle = Tooltip.createHandle<ReactNode>()
 
 /** Hover intent before the first tooltip appears. */
-const openDelay = 450
+const openDelay = 300
 /** After the pointer leaves every trigger, re-entering within this window opens instantly. */
 const warmWindow = 500
 
@@ -55,6 +55,8 @@ export const TooltipHost = ({ children }: { children: ReactNode }) => {
 
 interface TooltipTriggerProps {
   content: ReactNode
+  /** Override the open delay, e.g. shorter for an explicit info icon the user aims at. */
+  delay?: number
   /**
    * The element that receives hover. Make it the full hit area (e.g. the table cell itself), so
    * neighbouring triggers touch and the pointer never crosses a gap between them.
@@ -62,6 +64,30 @@ interface TooltipTriggerProps {
   render: ReactElement<Record<string, unknown>>
 }
 
-export const TooltipTrigger = ({ content, render }: TooltipTriggerProps) => (
-  <Tooltip.Trigger handle={handle} payload={content} render={render} />
+export const TooltipTrigger = ({ content, delay, render }: TooltipTriggerProps) => (
+  <Tooltip.Trigger delay={delay} handle={handle} payload={content} render={render} />
+)
+
+/**
+ * A small inline "i" that explains something about its row. It opens faster than cell tooltips
+ * because pointing at it is deliberate. The hit area extends past the glyph without moving layout.
+ */
+export const InfoHint = ({ children, label }: { children: ReactNode; label: string }) => (
+  <TooltipTrigger
+    content={children}
+    delay={100}
+    render={
+      <span
+        aria-label={label}
+        className='relative inline-flex size-3.5 shrink-0 items-center justify-center self-center rounded-full text-faint snap hover:text-secondary after:absolute after:-inset-1.5'
+        role='img'
+      >
+        <svg aria-hidden='true' className='size-3.5' fill='none' viewBox='0 0 14 14'>
+          <circle cx='7' cy='7' r='5.75' stroke='currentColor' strokeWidth='1.2' />
+          <path d='M7 6.25v3.5' stroke='currentColor' strokeLinecap='round' strokeWidth='1.3' />
+          <circle cx='7' cy='4.4' fill='currentColor' r='0.8' />
+        </svg>
+      </span>
+    }
+  />
 )

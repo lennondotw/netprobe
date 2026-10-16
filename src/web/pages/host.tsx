@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 
-import type { HostInfo, HostInterface } from '../../shared/types.ts'
+import type { HostInfo, HostInterface, MacNetworkInfo, MacResolver } from '../../shared/types.ts'
+import { StatusDot } from '../components/ui/badge.tsx'
 import { Callout } from '../components/ui/callout.tsx'
 import { buttonClass } from '../components/ui/controls.tsx'
 import { DataTable } from '../components/ui/data-table.tsx'
@@ -9,6 +10,7 @@ import { gutter } from '../components/ui/layout.ts'
 import { Row, SectionLabel } from '../components/ui/list.tsx'
 import { MetaList, PageHeader, Toolbar } from '../components/ui/page-header.tsx'
 import { ListSkeleton } from '../components/ui/skeleton.tsx'
+import { InfoHint } from '../components/ui/tooltip.tsx'
 import { ApiError } from '../lib/api.ts'
 import { formatBytes, formatRelative, isFakeIp } from '../lib/format.ts'
 
@@ -39,18 +41,30 @@ const Empty = ({ children }: { children: ReactNode }) => (
   <span className='text-faint'>{children}</span>
 )
 
-const List = ({ values, fake }: { values: readonly string[]; fake?: boolean }) =>
+const List = ({ values }: { values: readonly string[] }) =>
   values.length === 0 ? (
     <Empty>None</Empty>
   ) : (
     <span className='grid justify-items-end gap-0.5'>
       {values.map((value) => (
-        <span className={`${mono} ${fake && isFakeIp(value) ? 'text-warning' : ''}`} key={value}>
+        <span className={mono} key={value}>
           {value}
         </span>
       ))}
     </span>
   )
+
+const FakeDnsHint = () => (
+  <InfoHint label='Fake-IP DNS'>
+    <span className='grid max-w-72 gap-1'>
+      <span className='font-medium text-foreground'>Fake-IP DNS (198.18.0.0/15)</span>
+      <span className='text-muted'>
+        A local proxy answers DNS with placeholder addresses and maps them back to real hosts when
+        connections arrive, so DNS and TCP timings on this machine describe that proxy.
+      </span>
+    </span>
+  </InfoHint>
+)
 
 const scopeOrder = { public: 0, private: 1, special: 2, 'link-local': 3, loopback: 4 } as const
 
@@ -152,12 +166,6 @@ export const HostPage = () => {
           through that tunnel.
         </Callout>
       )}
-      {fakeResolver && (
-        <Callout title='System DNS returns fake IPs' tone='warning'>
-          {network.resolverCheck.name} resolves to {network.resolverCheck.addresses.join(', ')}: a
-          local proxy answers DNS and maps names to placeholder addresses.
-        </Callout>
-      )}
 
       <div className={`grid gap-x-10 gap-y-6 py-5 lg:grid-cols-2 2xl:grid-cols-3 ${gutter}`}>
         <Panel title='System'>
@@ -196,7 +204,10 @@ export const HostPage = () => {
             ))
           )}
           <Row label='DNS servers'>
-            <List fake values={network.dnsServers} />
+            <span className='flex items-start justify-end gap-1.5'>
+              <List values={network.dnsServers} />
+              {network.dnsServers.some(isFakeIp) && <FakeDnsHint />}
+            </span>
           </Row>
           <Row label='Search domains'>
             <List values={network.searchDomains} />
@@ -205,7 +216,10 @@ export const HostPage = () => {
             {network.resolverCheck.error ? (
               <span className='text-danger'>{network.resolverCheck.error}</span>
             ) : (
-              <List fake values={network.resolverCheck.addresses} />
+              <span className='flex items-start justify-end gap-1.5'>
+                <List values={network.resolverCheck.addresses} />
+                {fakeResolver && <FakeDnsHint />}
+              </span>
             )}
           </Row>
         </Panel>
@@ -260,8 +274,32 @@ export const HostPage = () => {
             </Row>
           )}
         </Panel>
+
+        {data.macos && (
+          <Panel title='macOS'>
+            <Row label='Bonjour name'>
+              <span className={mono}>
+                {data.macos.localHostName ? `${data.macos.localHostName}.local` : '—'}
+              </span>
+            </Row>
+            <Row label='Computer name'>{data.macos.computerName ?? <Empty>Unknown</Empty>}</Row>
+            <Row label='Service order'>
+              <span className='block max-w-80 text-right whitespace-normal'>
+                {data.macos.serviceOrder.map((service, index) => (
+                  <span className={service.enabled ? undefined : 'text-faint'} key={service.name}>
+                    {index > 0 && <span className='text-faint'> › </span>}
+                    {service.name}
+                  </span>
+                ))}
+              </span>
+            </Row>
+          </Panel>
+        )}
       </div>
 
+      {data.macos && <MacSections mac={data.macos} />}
+
+      <TableHeading>Interfaces</TableHeading>
       <DataTable
         columns={[
           {
@@ -295,7 +333,7 @@ export const HostPage = () => {
                     )
                     .map((a) => (
                       <span
-                        className={`${mono} ${a.scope === 'link-local' || a.scope === 'loopback' ? 'text-faint' : a.scope === 'special' ? 'text-warning' : 'text-secondary'}`}
+                        className={`${mono} ${a.scope === 'link-local' || a.scope === 'loopback' ? 'text-faint' : 'text-secondary'}`}
                         key={a.cidr}
                       >
                         {a.cidr}
@@ -321,6 +359,176 @@ export const HostPage = () => {
         getRowId={(iface) => iface.name}
         groups={groups}
         label='Network interfaces'
+      />
+    </>
+  )
+}
+
+/** A heading bar above a full-width table. */
+const TableHeading = ({ children }: { children: ReactNode }) => (
+  <div
+    className={`flex h-10 items-center border-t border-b border-line text-[12.5px] font-medium ${gutter}`}
+  >
+    {children}
+  </div>
+)
+
+const resolverGroups: { kind: MacResolver['kind']; label: string }[] = [
+  { kind: 'default', label: 'Default resolvers' },
+  { kind: 'domain', label: 'Per-domain resolvers' },
+  { kind: 'scoped', label: 'Scoped to an interface' },
+]
+
+/** macOS routes lookups through mDNSResponder, which can hold many resolvers at once. */
+const MacSections = ({ mac }: { mac: MacNetworkInfo }) => {
+  const extensions = [
+    ...mac.systemExtensions.map((ext) => ({
+      id: `ext:${ext.bundleId}`,
+      group: 'extensions' as const,
+      name: ext.name,
+      identifier: ext.bundleId,
+      kind: `${ext.category} extension · ${ext.version}`,
+      state: ext.state,
+      healthy: ext.enabled && /activated/.test(ext.state),
+    })),
+    ...mac.vpnServices.map((vpn) => ({
+      id: `vpn:${vpn.name}:${vpn.provider ?? ''}`,
+      group: 'vpn' as const,
+      name: vpn.name,
+      identifier: vpn.provider ?? '—',
+      kind: vpn.type,
+      state: vpn.enabled ? vpn.status : `${vpn.status} (disabled)`,
+      healthy: vpn.status === 'Connected',
+    })),
+  ]
+
+  return (
+    <>
+      <TableHeading>DNS resolvers (mDNSResponder)</TableHeading>
+      <DataTable
+        columns={[
+          {
+            id: 'domain',
+            header: 'Domain',
+            cell: (r) =>
+              r.domain ? (
+                <span className={`${mono} text-foreground`}>{r.domain}</span>
+              ) : (
+                <span className='text-muted'>All names</span>
+              ),
+          },
+          {
+            id: 'servers',
+            header: 'Nameservers',
+            className: 'w-full',
+            cell: (r) =>
+              r.mdns ? (
+                <span className='text-muted'>Multicast DNS (Bonjour)</span>
+              ) : r.nameservers.length ? (
+                <span className={`${mono} text-secondary`}>{r.nameservers.join(', ')}</span>
+              ) : (
+                <Empty>—</Empty>
+              ),
+          },
+          {
+            id: 'interface',
+            header: 'Interface',
+            className: `${mono} text-muted`,
+            cell: (r) => r.interface ?? '—',
+          },
+          {
+            id: 'reach',
+            header: 'Reachable',
+            cell: (r) =>
+              r.mdns || r.reachable === null ? (
+                <Empty>—</Empty>
+              ) : (
+                <span className='flex items-center gap-1.5'>
+                  <StatusDot tone={r.reachable ? 'success' : 'error'} />
+                  {r.reachable ? 'Yes' : 'No'}
+                </span>
+              ),
+          },
+        ]}
+        empty={null}
+        getRowId={(r) =>
+          `${r.kind}:${r.domain ?? ''}:${r.interface ?? ''}:${r.nameservers.join(',')}`
+        }
+        groups={resolverGroups
+          .map(({ kind, label }) => {
+            const rows = mac.resolvers.filter((r) => r.kind === kind)
+            return {
+              id: kind,
+              label,
+              rows,
+              header: (
+                <>
+                  <span>{label}</span>
+                  <span className='text-[12px] font-normal text-faint tabular-nums'>
+                    {rows.length}
+                  </span>
+                </>
+              ),
+            }
+          })
+          .filter((group) => group.rows.length > 0)}
+        label='DNS resolvers'
+      />
+
+      <TableHeading>Network extensions & VPN</TableHeading>
+      <DataTable
+        columns={[
+          {
+            id: 'name',
+            header: 'Name',
+            cell: (row) => <span className='font-medium text-foreground'>{row.name}</span>,
+          },
+          {
+            id: 'identifier',
+            header: 'Identifier',
+            className: `${mono} text-muted`,
+            cell: (row) => row.identifier,
+          },
+          { id: 'kind', header: 'Type', className: 'text-secondary', cell: (row) => row.kind },
+          {
+            id: 'state',
+            header: 'State',
+            className: 'w-full',
+            cell: (row) => (
+              <span className='flex items-center gap-1.5'>
+                <StatusDot tone={row.healthy ? 'success' : 'neutral'} />
+                {row.state}
+              </span>
+            ),
+          },
+        ]}
+        empty={
+          <p className={`py-3 text-[12.5px] text-muted ${gutter}`}>
+            No system extensions or VPN configurations.
+          </p>
+        }
+        getRowId={(row) => row.id}
+        groups={[
+          { id: 'extensions', label: 'System extensions' },
+          { id: 'vpn', label: 'VPN & Network Extension configurations' },
+        ]
+          .map((group) => {
+            const rows = extensions.filter((row) => row.group === group.id)
+            return {
+              ...group,
+              rows,
+              header: (
+                <>
+                  <span>{group.label}</span>
+                  <span className='text-[12px] font-normal text-faint tabular-nums'>
+                    {rows.length}
+                  </span>
+                </>
+              ),
+            }
+          })
+          .filter((group) => group.rows.length > 0)}
+        label='Network extensions and VPN configurations'
       />
     </>
   )

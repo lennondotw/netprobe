@@ -119,7 +119,7 @@ export const platforms: ServiceInput[] = [
       site('baidu', 'Baidu', 'https://www.baidu.com/'),
       site('qq', 'QQ', 'https://www.qq.com/'),
       site('aliyun', 'Alibaba Cloud', 'https://www.aliyun.com/'),
-      site('bilibili', 'Bilibili', 'https://www.bilibili.com/'),
+      site('bilibili', 'bilibili', 'https://www.bilibili.com/'),
       site('aliyun-mirror', 'Alibaba Cloud mirror', 'https://mirrors.aliyun.com/'),
       site('tuna-mirror', 'TUNA mirror', 'https://mirrors.tuna.tsinghua.edu.cn/'),
       site('npmmirror', 'npmmirror registry', 'https://registry.npmmirror.com/'),

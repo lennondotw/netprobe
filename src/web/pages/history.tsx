@@ -18,32 +18,62 @@ export const runStatus: Record<RunStatus, { label: string; tone: Tone }> = {
 
 const ipLabel = { auto: 'Auto', ipv4: 'IPv4', ipv6: 'IPv6' } as const
 
-const Totals = ({ run }: { run: RunRecord }) => {
+type TotalsKey = keyof RunRecord['totals']
+type Widths = Record<TotalsKey, number>
+
+const digits = (n: number) => String(n).length
+
+/**
+ * Digits each part of the results column needs, taken from the widest value of that part in the
+ * list, so every row reserves the same space per part and the parts line up.
+ */
+const widthsOf = (runs: readonly RunRecord[]): Widths => {
+  const widest = (key: TotalsKey) => Math.max(1, ...runs.map((run) => digits(run.totals[key])))
+  return {
+    expected: widest('expected'),
+    reachable: widest('reachable'),
+    failed: widest('failed'),
+    targets: widest('targets'),
+  }
+}
+
+/** A right-aligned count in a box sized for `width` digits of a monospace font. */
+const Count = ({ value, width }: { value: number; width: number }) => (
+  <span className='inline-block text-right' style={{ width: `${width}ch` }}>
+    {value}
+  </span>
+)
+
+const Totals = ({ run, widths }: { run: RunRecord; widths: Widths }) => {
   const { expected, reachable, failed, targets } = run.totals
   return (
     <span className='flex items-center gap-3 font-mono text-[12px] tabular-nums'>
       <span className='flex items-center gap-1.5' title='Healthy'>
         <StatusDot tone='success' />
-        {expected}
+        <Count value={expected} width={widths.expected} />
       </span>
       <span
         className={`flex items-center gap-1.5 ${reachable ? '' : 'text-faint'}`}
         title='Unexpected response'
       >
         <StatusDot tone='warning' />
-        {reachable}
+        <Count value={reachable} width={widths.reachable} />
       </span>
       <span className={`flex items-center gap-1.5 ${failed ? '' : 'text-faint'}`} title='Failed'>
         <StatusDot tone='error' />
-        {failed}
+        <Count value={failed} width={widths.failed} />
       </span>
-      <span className='text-faint'>/ {targets}</span>
+      <span className='flex items-center gap-1.5 text-faint'>
+        /
+        <Count value={targets} width={widths.targets} />
+      </span>
     </span>
   )
 }
 
 export const HistoryPage = () => {
   const runs = useRuns()
+  const widths = widthsOf(runs.data ?? [])
 
   return (
     <>
@@ -108,7 +138,11 @@ export const HistoryPage = () => {
               cell: (run) =>
                 `${run.runtime.hostLabel}${run.runtime.environment === 'container' ? ' (container)' : ''}`,
             },
-            { id: 'totals', header: 'Results', cell: (run) => <Totals run={run} /> },
+            {
+              id: 'totals',
+              header: 'Results',
+              cell: (run) => <Totals run={run} widths={widths} />,
+            },
             {
               id: 'duration',
               header: 'Duration',
