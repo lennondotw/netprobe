@@ -57,13 +57,20 @@ const configSchema = z.object({
       connections: z.number().int().min(2).max(16).default(4),
       timeoutMs: z.number().int().min(5_000).max(600_000).default(120_000),
       /** Hard cap per request; larger files are aborted rather than downloaded. */
-      maxBytes: z.number().int().positive().default(200 * 1024 * 1024),
+      maxBytes: z
+        .number()
+        .int()
+        .positive()
+        .default(200 * 1024 * 1024),
     })
     .prefault({}),
   ipFamily: z.enum(['auto', 'ipv4', 'ipv6']).default('auto'),
   /** Endpoint that echoes the caller's public IP, as `ip=` lines or a bare address. */
   egressCheckUrl: z.url().default('https://www.cloudflare.com/cdn-cgi/trace'),
-  egress: z.array(egressSchema).min(1).default([{ id: 'direct', name: 'Direct' }]),
+  egress: z
+    .array(egressSchema)
+    .min(1)
+    .default([{ id: 'direct', name: 'Direct' }]),
   presets: z.object({ exclude: z.array(z.string()).default([]) }).prefault({}),
   services: z.array(serviceSchema).default([]),
 })
@@ -193,5 +200,9 @@ export const loadConfig = (path: string | undefined): ResolvedConfig => {
 }
 
 /** Strip server-only fields before a target or service is sent to the browser. */
-export const publicTarget = ({ rawUrl: _raw, followRedirects: _f, parallel: _p, ...target }: ResolvedTarget): TargetInfo =>
-  target
+export const publicTarget = ({
+  rawUrl: _raw,
+  followRedirects: _f,
+  parallel: _p,
+  ...target
+}: ResolvedTarget): TargetInfo => target

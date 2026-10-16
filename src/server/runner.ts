@@ -83,7 +83,13 @@ export class Runner {
       finishedAt: null,
       status: 'running',
       params: { ...params, targetIds: eligible.map((t) => t.id) },
-      egress: { id: egress.id, name: egress.name, proxy: egress.proxy, publicIp: null, publicIpError: null },
+      egress: {
+        id: egress.id,
+        name: egress.name,
+        proxy: egress.proxy,
+        publicIp: null,
+        publicIpError: null,
+      },
       runtime: this.#runtime,
       error: null,
       totals: { targets: eligible.length, expected: 0, reachable: 0, failed: 0 },
@@ -91,10 +97,23 @@ export class Runner {
     const results = new Map(
       eligible.map((t): [string, TargetResult] => [
         t.id,
-        { targetId: t.id, serviceId: t.serviceId, status: 'pending', outcome: null, summary: null, attempts: [], downloads: [] },
+        {
+          targetId: t.id,
+          serviceId: t.serviceId,
+          status: 'pending',
+          outcome: null,
+          summary: null,
+          attempts: [],
+          downloads: [],
+        },
       ]),
     )
-    const active: ActiveRun = { record, results, abort: new AbortController(), events: new EventEmitter() }
+    const active: ActiveRun = {
+      record,
+      results,
+      abort: new AbortController(),
+      events: new EventEmitter(),
+    }
     this.#active = active
     this.#store.saveRun(record)
 
@@ -130,7 +149,8 @@ export class Runner {
         result.status = 'running'
         emit({ type: 'target', result: { ...result } })
 
-        if (record.params.mode === 'download') await this.#download(target, egress, record.params, result, abort.signal, emit)
+        if (record.params.mode === 'download')
+          await this.#download(target, egress, record.params, result, abort.signal, emit)
         else await this.#probe(target, egress, record.params, result, abort.signal, emit)
 
         result.status = abort.signal.aborted ? 'cancelled' : 'done'
@@ -224,14 +244,26 @@ export class Runner {
     }
 
     // Single connection: the whole file, which also tells us its size for the range split.
-    const single = await this.#downloadBatch([base], target.download?.bytes ?? null, 'single', target, signal)
+    const single = await this.#downloadBatch(
+      [base],
+      target.download?.bytes ?? null,
+      'single',
+      target,
+      signal,
+    )
     result.downloads.push(single)
     this.#refresh(result)
     emit({ type: 'target', result: { ...result } })
 
     const size = single.throughput?.bytes ?? 0
     const connections = this.#config.download.connections
-    if (signal.aborted || target.parallel !== 'range' || single.outcome !== 'transferred' || size < connections) return
+    if (
+      signal.aborted ||
+      target.parallel !== 'range' ||
+      single.outcome !== 'transferred' ||
+      size < connections
+    )
+      return
 
     const chunk = Math.ceil(size / connections)
     const requests = Array.from({ length: connections }, (_, i): CurlRequest => {
@@ -282,7 +314,8 @@ export class Runner {
       const total = timed.reduce((sum, { sample }) => sum + sample.sizeDownload, 0)
       if (attempts.some((a) => a.httpStatus === 200 || a.curlExit === 63)) {
         errorKind = 'range_unsupported'
-        errorMessage = 'The server ignored the Range header; multi-connection throughput is not measurable.'
+        errorMessage =
+          'The server ignored the Range header; multi-connection throughput is not measurable.'
         outcome = 'reachable'
       } else if (!failure && expectBytes !== null && total !== expectBytes) {
         errorKind = 'size_mismatch'
@@ -304,7 +337,9 @@ export class Runner {
 
   #refresh(result: TargetResult) {
     if (result.downloads.length > 0) {
-      result.outcome = worstOutcome(result.downloads.filter((d) => d.errorKind !== 'range_unsupported').map((d) => d.outcome))
+      result.outcome = worstOutcome(
+        result.downloads.filter((d) => d.errorKind !== 'range_unsupported').map((d) => d.outcome),
+      )
       result.summary = summarize(result.downloads.flatMap((d) => d.attempts))
       return
     }
@@ -312,8 +347,18 @@ export class Runner {
     result.summary = summarize(result.attempts)
   }
 
-  async #checkEgress(egress: ResolvedEgress, params: RunParams, signal: AbortSignal): Promise<EgressSnapshot> {
-    const snapshot: EgressSnapshot = { id: egress.id, name: egress.name, proxy: egress.proxy, publicIp: null, publicIpError: null }
+  async #checkEgress(
+    egress: ResolvedEgress,
+    params: RunParams,
+    signal: AbortSignal,
+  ): Promise<EgressSnapshot> {
+    const snapshot: EgressSnapshot = {
+      id: egress.id,
+      name: egress.name,
+      proxy: egress.proxy,
+      publicIp: null,
+      publicIpError: null,
+    }
     try {
       const body = await fetchText(this.#config.egressCheckUrl, {
         proxy: egress.rawProxy,
@@ -324,7 +369,8 @@ export class Runner {
       const fromTrace = /^ip=(.+)$/m.exec(body)?.[1]?.trim()
       const bare = body.trim()
       snapshot.publicIp = fromTrace ?? (/^[0-9a-f.:]+$/i.test(bare) ? bare : null)
-      if (!snapshot.publicIp) snapshot.publicIpError = 'The echo endpoint did not return an IP address.'
+      if (!snapshot.publicIp)
+        snapshot.publicIpError = 'The echo endpoint did not return an IP address.'
     } catch (error) {
       snapshot.publicIpError = redactText(error instanceof Error ? error.message : String(error))
     }

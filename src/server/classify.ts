@@ -228,7 +228,9 @@ interface TimedSample {
  */
 export const throughputOf = (samples: readonly TimedSample[], wallSeconds: number): Throughput => {
   const bytes = samples.reduce((sum, { sample }) => sum + sample.sizeDownload, 0)
-  const firstByte = Math.min(...samples.map(({ sample, offset }) => offset + sample.timeStarttransfer))
+  const firstByte = Math.min(
+    ...samples.map(({ sample, offset }) => offset + sample.timeStarttransfer),
+  )
   const lastByte = Math.max(...samples.map(({ sample, offset }) => offset + sample.timeTotal))
   const transferSeconds = Math.max(lastByte - firstByte, 0.001)
   return {

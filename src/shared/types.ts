@@ -93,7 +93,13 @@ export interface TargetSummary {
   expected: number
   failed: number
   /** Median phase durations across attempts that reached that phase. */
-  median: { dns: number | null; tcp: number | null; tls: number | null; ttfb: number | null; total: number | null }
+  median: {
+    dns: number | null
+    tcp: number | null
+    tls: number | null
+    ttfb: number | null
+    total: number | null
+  }
   min: { total: number | null }
   max: { total: number | null }
   /** Most common failure among attempts, if any failed. */

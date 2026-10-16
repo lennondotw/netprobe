@@ -107,7 +107,10 @@ export const parseWriteOut = (stdout: string): Omit<CurlSample, 'aborted'> | nul
     sizeDownload: number('size_download'),
     urlEffective: value('url_effective'),
     // Everything after the last fixed field is the message, even if it contains a tab.
-    errorMessage: parts.slice(fields.length - 1).join('\t').trim(),
+    errorMessage: parts
+      .slice(fields.length - 1)
+      .join('\t')
+      .trim(),
   }
 }
 
@@ -165,13 +168,24 @@ export const fetchText = (
   options: { proxy: string | null; ipFamily: IpFamily; timeoutMs: number; signal: AbortSignal },
 ): Promise<string> =>
   new Promise((resolve, reject) => {
-    const args = ['-q', '--silent', '--show-error', '--fail', '--max-time', String(options.timeoutMs / 1000)]
+    const args = [
+      '-q',
+      '--silent',
+      '--show-error',
+      '--fail',
+      '--max-time',
+      String(options.timeoutMs / 1000),
+    ]
     if (options.ipFamily === 'ipv4') args.push('--ipv4')
     if (options.ipFamily === 'ipv6') args.push('--ipv6')
     if (options.proxy) args.push('--proxy', options.proxy)
     else args.push('--noproxy', '*')
     args.push('--', url)
-    const child = spawn('curl', args, { env: curlEnv(), signal: options.signal, killSignal: 'SIGKILL' })
+    const child = spawn('curl', args, {
+      env: curlEnv(),
+      signal: options.signal,
+      killSignal: 'SIGKILL',
+    })
     let stdout = ''
     let stderr = ''
     child.stdout.setEncoding('utf8').on('data', (chunk: string) => (stdout += chunk))

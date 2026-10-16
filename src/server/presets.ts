@@ -13,7 +13,8 @@ export const presets: ServiceInput[] = [
   {
     id: 'github',
     name: 'GitHub',
-    description: 'Web, API, raw content, source archives, release assets, and the container registry.',
+    description:
+      'Web, API, raw content, source archives, release assets, and the container registry.',
     targets: [
       { id: 'web', name: 'github.com', url: 'https://github.com/' },
       {
@@ -185,9 +186,14 @@ export const presets: ServiceInput[] = [
   {
     id: 'reference',
     name: 'Reference',
-    description: 'A neutral baseline to tell a service problem apart from a general egress problem.',
+    description:
+      'A neutral baseline to tell a service problem apart from a general egress problem.',
     targets: [
-      { id: 'cloudflare', name: 'Cloudflare trace', url: 'https://www.cloudflare.com/cdn-cgi/trace' },
+      {
+        id: 'cloudflare',
+        name: 'Cloudflare trace',
+        url: 'https://www.cloudflare.com/cdn-cgi/trace',
+      },
       {
         id: 'cloudflare-25mb',
         name: 'Cloudflare 25 MB',
