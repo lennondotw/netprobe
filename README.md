@@ -1,3 +1,9 @@
+![Netprobe's Connectivity page: latency baselines, captive-portal checks, and UDP/QUIC probes with per-phase timings](docs/images/netprobe.png)
+
+The Connectivity page on a home server: every target is probed several times, each row breaks the
+request into DNS, TCP, TLS, and time to first byte, and flaky targets show as _Intermittent_ with
+the reason they failed, such as packet loss or a timeout.
+
 # Netprobe
 
 [![CI](https://github.com/lennondotw/netprobe/actions/workflows/ci.yml/badge.svg)](https://github.com/lennondotw/netprobe/actions/workflows/ci.yml)
