@@ -82,9 +82,11 @@ export const OverlayScrollbar = ({ sync }: { sync: ScrollSync }) => {
   const drag = useRef<{ pointerId: number; startX: number; startLeft: number } | null>(null)
   const [hovered, setHovered] = useState(false)
   const [dragging, setDragging] = useState(false)
-  // Shown while scrolling, then hidden again once scrolling stops.
+  // Shown while its own section is scrolled under the pointer, then hidden once scrolling stops.
+  // The other sections' bars move in step but stay hidden.
   const [scrolling, setScrolling] = useState(false)
   const lastLeft = useRef<number | null>(null)
+  const pointerInSection = useRef(false)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const geometry = useCallback(() => {
@@ -110,7 +112,11 @@ export const OverlayScrollbar = ({ sync }: { sync: ScrollSync }) => {
       const g = geometry()
       thumb.style.width = `${g.thumb}px`
       thumb.style.transform = `translateX(${g.offset}px)`
-      if (lastLeft.current !== null && lastLeft.current !== g.scrollLeft) {
+      if (
+        pointerInSection.current &&
+        lastLeft.current !== null &&
+        lastLeft.current !== g.scrollLeft
+      ) {
         setScrolling(true)
         clearTimeout(hideTimer.current)
         hideTimer.current = setTimeout(() => setScrolling(false), lingerMs)
@@ -128,6 +134,25 @@ export const OverlayScrollbar = ({ sync }: { sync: ScrollSync }) => {
       clearTimeout(hideTimer.current)
     }
   }, [sync, geometry])
+
+  // The section is the table body this bar belongs to (or the whole table without groups).
+  useLayoutEffect(() => {
+    const section = trackRef.current?.closest('tbody')
+    if (!section) return
+    const enter = () => (pointerInSection.current = true)
+    const leave = () => {
+      pointerInSection.current = false
+      clearTimeout(hideTimer.current)
+      setScrolling(false)
+    }
+    section.addEventListener('pointerenter', enter)
+    section.addEventListener('pointerleave', leave)
+    pointerInSection.current = section.matches(':hover')
+    return () => {
+      section.removeEventListener('pointerenter', enter)
+      section.removeEventListener('pointerleave', leave)
+    }
+  }, [])
 
   const endDrag = () => {
     drag.current = null
