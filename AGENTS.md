@@ -23,6 +23,9 @@ erasable syntax only (no enums, namespaces, or parameter properties).
 - Targets come from config only; do not add API endpoints that accept arbitrary URLs.
 - UI: no pointer cursors, chrome text is not selectable (opt in with `select-text` for long-form
   content), and hover states use the `snap` utility (instant in, fast out).
+- Hover details go through the shared tooltip (`ui/tooltip.tsx`, or a DataTable column's
+  `tooltip`): one root for the page, whole cells as hit targets, a popup that ignores the pointer.
+  Do not mount a separate tooltip root per element.
 - Add focused tests for classification and config parsing changes.
 - Conventional commits; commit whenever typecheck and build pass.
 
