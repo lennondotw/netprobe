@@ -237,3 +237,61 @@ export type RunEvent =
   | { type: 'snapshot'; run: RunDetail }
   | { type: 'target'; result: TargetResult }
   | { type: 'run'; run: RunRecord }
+
+export interface HostInterface {
+  name: string
+  /** Addresses in CIDR notation. */
+  addresses: {
+    family: 'IPv4' | 'IPv6'
+    cidr: string
+    scope: 'loopback' | 'link-local' | 'private' | 'public' | 'special'
+  }[]
+  mac: string | null
+  mtu: number | null
+  internal: boolean
+  /** Tunnel interfaces (utun, tun, wg, tailscale): usually a VPN or a proxy in TUN mode. */
+  tunnel: boolean
+  /** What the interface appears to be, recognised from its addresses (e.g. "Tailscale"). */
+  role: string | null
+}
+
+export interface HostProxySetting {
+  label: string
+  value: string
+}
+
+/** A snapshot of the machine the server runs on, as seen from the server process. */
+export interface HostInfo {
+  collectedAt: string
+  runtime: RuntimeInfo
+  system: {
+    hostname: string
+    model: string | null
+    os: string
+    kernel: string
+    arch: string
+    cpu: string
+    cpuCount: number
+    memoryBytes: number
+    freeMemoryBytes: number
+    uptimeSeconds: number
+    loadAverage: [number, number, number]
+    timezone: string
+    nodeVersion: string
+    curlFeatures: string[]
+  }
+  network: {
+    gateways: { family: 'IPv4' | 'IPv6'; gateway: string; interface: string | null }[]
+    dnsServers: string[]
+    searchDomains: string[]
+    /** What the system resolver returns for a well-known name, to spot fake-IP DNS. */
+    resolverCheck: { name: string; addresses: string[]; error: string | null }
+  }
+  proxy: {
+    system: HostProxySetting[]
+    environment: HostProxySetting[]
+  }
+  interfaces: HostInterface[]
+  /** Collectors that failed or are not supported on this platform. */
+  unavailable: string[]
+}

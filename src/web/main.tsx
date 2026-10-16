@@ -7,6 +7,7 @@ import { AppShell } from './components/shell.tsx'
 import { TooltipHost } from './components/ui/tooltip.tsx'
 import { usePathname } from './lib/router.tsx'
 import { HistoryPage } from './pages/history.tsx'
+import { HostPage } from './pages/host.tsx'
 import { OverviewPage } from './pages/overview.tsx'
 import { RunPage } from './pages/run.tsx'
 
@@ -19,6 +20,7 @@ const Routes = () => {
   const run = /^\/runs\/([\w-]+)$/.exec(pathname)
   if (run) return <RunPage id={run[1]!} key={run[1]} />
   if (pathname === '/runs') return <HistoryPage />
+  if (pathname === '/host') return <HostPage />
   return <OverviewPage />
 }
 

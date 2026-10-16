@@ -7,6 +7,7 @@ import { z } from 'zod'
 import type { AppConfig, RunEvent } from '../shared/types.ts'
 import { publicTarget, type ResolvedConfig } from './config.ts'
 import type { Store } from './db.ts'
+import { collectHostInfo } from './host.ts'
 import { RunConflictError, type Runner } from './runner.ts'
 
 const startRunSchema = z.object({
@@ -62,6 +63,8 @@ export const buildApp = async ({ config, store, runner, runtime, webRoot, logger
   }))
 
   app.get('/api/latest', async () => store.latestResults())
+
+  app.get('/api/host', async () => collectHostInfo(runtime))
 
   app.get('/api/runs', async (request) => {
     const { limit } = z

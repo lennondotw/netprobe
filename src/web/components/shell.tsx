@@ -11,6 +11,16 @@ const navItems = [
     icon: <path d='M2.5 13.5h11M4 11V7m4 4V3.5m4 7.5V6' />,
   },
   {
+    href: '/host',
+    label: 'Host',
+    icon: (
+      <>
+        <rect height='8.5' rx='1.5' width='12' x='2' y='2.5' />
+        <path d='M5.5 13.5h5M8 11v2.5M4.5 5.5h2' />
+      </>
+    ),
+  },
+  {
     href: '/runs',
     label: 'History',
     icon: (
