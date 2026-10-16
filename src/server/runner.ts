@@ -18,6 +18,7 @@ import { summarize, throughputOf, toAttempt, worstOutcome } from './classify.ts'
 import type { ResolvedConfig, ResolvedEgress, ResolvedTarget } from './config.ts'
 import { type CurlRequest, fetchText, runCurl } from './curl.ts'
 import type { Store } from './db.ts'
+import { runPing, runSocketProbe } from './probes/index.ts'
 import { redactText } from './redact.ts'
 
 const userAgent = 'netprobe/0.1 (+https://github.com/)'
@@ -74,8 +75,8 @@ export class Runner {
       if (!target) throw new Error(`Unknown target "${id}".`)
       return target
     })
-    const eligible = targets.filter((t) => (params.mode === 'download' ? t.download : !t.download))
-    if (eligible.length === 0) throw new Error('No selected target supports this mode.')
+    const eligible = targets.filter((t) => isEligible(t, params.mode, egress))
+    if (eligible.length === 0) throw new Error('No selected target supports this mode and egress.')
 
     const record: RunRecord = {
       id: randomUUID(),
@@ -215,17 +216,40 @@ export class Runner {
     signal: AbortSignal,
     emit: (event: RunEvent) => void,
   ) {
+    const repeats = Math.max(params.repeats, target.samples)
+    const context = {
+      connectTimeoutMs: this.#config.probe.connectTimeoutMs,
+      timeoutMs: Math.min(this.#config.probe.timeoutMs, 5_000),
+      ipFamily: params.ipFamily,
+      signal,
+    }
+
+    if (target.kind === 'icmp') {
+      // One ping process sends every echo at an even interval.
+      const attempts = await runPing(target.rawUrl, repeats, context)
+      result.attempts.push(...attempts.filter((a) => a.errorKind !== 'cancelled'))
+      this.#refresh(result)
+      emit({ type: 'target', result: { ...result } })
+      return
+    }
+
     const request = this.#request(target, egress, params)
-    for (let seq = 1; seq <= params.repeats; seq++) {
+    for (let seq = 1; seq <= repeats; seq++) {
       if (signal.aborted) break
       const startedAt = new Date().toISOString()
-      const sample = await runCurl(request, signal)
-      const attempt = toAttempt(sample, { seq, startedAt, expectStatus: target.expectStatus })
+      const attempt =
+        target.kind === 'http'
+          ? toAttempt(await runCurl(request, signal), {
+              seq,
+              startedAt,
+              expectStatus: target.expectStatus,
+            })
+          : await runSocketProbe(target.kind, target.rawUrl, { ...context, seq })
       if (attempt.errorKind !== 'cancelled') result.attempts.push(attempt)
       this.#refresh(result)
       emit({ type: 'target', result: { ...result } })
       // A short gap so repeats do not all land in the same congestion window.
-      if (seq < params.repeats) await sleep(200, undefined, { signal }).catch(() => {})
+      if (seq < repeats) await sleep(200, undefined, { signal }).catch(() => {})
     }
   }
 
@@ -377,6 +401,20 @@ export class Runner {
     }
     return snapshot
   }
+}
+
+/**
+ * Whether a target belongs in a run. Socket-level probes (ICMP, TCP, DNS, STUN, QUIC) cannot be
+ * sent through an HTTP or SOCKS proxy, so they only run on a direct egress.
+ */
+export const isEligible = (
+  target: ResolvedTarget,
+  mode: RunParams['mode'],
+  egress: ResolvedEgress,
+) => {
+  if (mode === 'download') return target.download !== null
+  if (target.download) return false
+  return target.kind === 'http' || egress.rawProxy === null
 }
 
 /** Run async tasks with at most `limit` in flight. */
