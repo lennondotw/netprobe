@@ -191,6 +191,8 @@
    * the arrow cursor. Long-form content (URLs, error output, notes) opts back in with `select-text`.
    */
   body {
+    /* Wide tables scroll inside their own container; the page itself never scrolls sideways. */
+    overflow-x: clip;
     user-select: none;
     -webkit-user-select: none;
   }

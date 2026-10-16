@@ -1,6 +1,7 @@
 import type { KeyboardEvent, MouseEvent, ReactNode } from 'react'
 
 import { gutter } from './layout.ts'
+import { TooltipTrigger } from './tooltip.tsx'
 
 export interface DataTableColumn<Row> {
   /** Cell renderer. Keep cells to a single line; details belong in the row's dialog. */
@@ -10,6 +11,11 @@ export interface DataTableColumn<Row> {
   id: string
   /** The column whose cell names the row; it becomes the row's keyboard target when rows open. */
   primary?: boolean
+  /**
+   * Hover detail for the cell. The whole cell is the hover target, so tooltip cells in adjacent
+   * rows and columns touch with no gap between them. Return null for cells with nothing to add.
+   */
+  tooltip?: (row: Row) => ReactNode
 }
 
 export interface DataTableGroup<Row> {
@@ -122,7 +128,11 @@ export const DataTable = <Row,>({
                   onClick={(event) => openFromRow(event, row)}
                 >
                   {columns.map((column) => (
-                    <td className={`${cellBase} py-1 ${column.className ?? ''}`} key={column.id}>
+                    <Cell
+                      className={`${cellBase} py-1 ${column.className ?? ''}`}
+                      key={column.id}
+                      tooltip={column.tooltip?.(row) ?? null}
+                    >
                       {column.primary && onRowOpen ? (
                         <button
                           aria-haspopup='dialog'
@@ -136,7 +146,7 @@ export const DataTable = <Row,>({
                       ) : (
                         column.cell(row)
                       )}
-                    </td>
+                    </Cell>
                   ))}
                 </tr>
               )
@@ -147,3 +157,18 @@ export const DataTable = <Row,>({
     </div>
   )
 }
+
+const Cell = ({
+  children,
+  className,
+  tooltip,
+}: {
+  children: ReactNode
+  className: string
+  tooltip: ReactNode
+}) =>
+  tooltip === null ? (
+    <td className={className}>{children}</td>
+  ) : (
+    <TooltipTrigger content={tooltip} render={<td className={className}>{children}</td>} />
+  )

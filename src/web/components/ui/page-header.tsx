@@ -15,7 +15,7 @@ export const PageHeader = ({ actions, title }: PageHeaderProps) => (
     <div className='flex min-w-0 items-center gap-2'>
       <h1 className='truncate text-[14px] font-semibold tracking-[-0.01em]'>{title}</h1>
     </div>
-    {actions && <div className='ml-auto flex items-center gap-2'>{actions}</div>}
+    {actions && <div className='ml-auto flex min-w-0 flex-wrap items-center gap-2'>{actions}</div>}
   </header>
 )
 

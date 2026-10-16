@@ -4,7 +4,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import { AppShell } from './components/shell.tsx'
-import { TooltipProvider } from './components/ui/inputs.tsx'
+import { TooltipHost } from './components/ui/tooltip.tsx'
 import { usePathname } from './lib/router.tsx'
 import { HistoryPage } from './pages/history.tsx'
 import { OverviewPage } from './pages/overview.tsx'
@@ -25,11 +25,11 @@ const Routes = () => {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
+      <TooltipHost>
         <AppShell>
           <Routes />
         </AppShell>
-      </TooltipProvider>
+      </TooltipHost>
     </QueryClientProvider>
   </StrictMode>,
 )

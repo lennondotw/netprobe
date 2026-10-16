@@ -20,7 +20,7 @@ import {
 import { Badge, StatusDot, type Tone } from './ui/badge.tsx'
 import { DataTable, type DataTableColumn, type DataTableGroup } from './ui/data-table.tsx'
 import { DetailDialog, DetailSection, useDetailDialog } from './ui/dialog.tsx'
-import { Checkbox, Tooltip } from './ui/inputs.tsx'
+import { Checkbox } from './ui/inputs.tsx'
 import { Row, SectionLabel } from './ui/list.tsx'
 
 export interface ResultEntry {
@@ -38,6 +38,9 @@ const phaseBars = [
 
 type PhaseValues = Record<(typeof phaseBars)[number]['key'], number | null>
 
+const hasTiming = (total: number | null, scale: number): total is number =>
+  total != null && scale > 0
+
 /**
  * A one-line request waterfall: each phase is a segment, scaled against the slowest request in
  * view so rows can be compared at a glance.
@@ -51,69 +54,66 @@ export const Waterfall = ({
   total: number | null
   scale: number
 }) => {
-  if (total == null || scale <= 0) return <span className='text-faint'>—</span>
+  if (!hasTiming(total, scale)) return <span className='text-faint'>—</span>
   const parts = phaseBars.map((bar) => ({ ...bar, value: phases[bar.key] ?? 0 }))
   const rest = Math.max(total - parts.reduce((sum, p) => sum + p.value, 0), 0)
   return (
-    <Tooltip
-      content={
-        <dl className='grid grid-cols-[auto_auto] gap-x-4 font-mono text-[11.5px]'>
-          {parts.map((p) => (
-            <div className='contents' key={p.key}>
-              <dt className='flex items-center gap-1.5 text-muted'>
-                <span className={`size-2 rounded-[2px] ${p.className}`} />
-                {p.label}
-              </dt>
-              <dd className='text-right'>{formatMs(phases[p.key])}</dd>
-            </div>
-          ))}
-          <dt className='text-muted'>Total</dt>
-          <dd className='text-right'>{formatMs(total)}</dd>
-        </dl>
-      }
-    >
-      <span className='flex h-3 w-28 items-center' aria-label={`Total ${formatMs(total)}`}>
-        <span
-          className='flex h-1.5 overflow-hidden rounded-full bg-line-subtle'
-          style={{ width: `${Math.max((total / scale) * 100, 2)}%` }}
-        >
-          {parts.map((p) =>
-            p.value > 0 ? (
-              <span
-                className={p.className}
-                key={p.key}
-                style={{ width: `${(p.value / total) * 100}%` }}
-              />
-            ) : null,
-          )}
-          {rest > 0 && (
-            <span className='bg-line-strong' style={{ width: `${(rest / total) * 100}%` }} />
-          )}
-        </span>
+    <span className='flex h-3 w-28 items-center' aria-label={`Total ${formatMs(total)}`}>
+      <span
+        className='flex h-1.5 overflow-hidden rounded-full bg-line-subtle'
+        style={{ width: `${Math.max((total / scale) * 100, 2)}%` }}
+      >
+        {parts.map((p) =>
+          p.value > 0 ? (
+            <span
+              className={p.className}
+              key={p.key}
+              style={{ width: `${(p.value / total) * 100}%` }}
+            />
+          ) : null,
+        )}
+        {rest > 0 && (
+          <span className='bg-line-strong' style={{ width: `${(rest / total) * 100}%` }} />
+        )}
       </span>
-    </Tooltip>
+    </span>
   )
 }
 
-const ErrorCell = ({ result }: { result: TargetResult | undefined }) => {
+const WaterfallDetail = ({ phases, total }: { phases: PhaseValues; total: number }) => (
+  <dl className='grid grid-cols-[auto_auto] gap-x-4 font-mono text-[11.5px]'>
+    {phaseBars.map((bar) => (
+      <div className='contents' key={bar.key}>
+        <dt className='flex items-center gap-1.5 text-muted'>
+          <span className={`size-2 rounded-[2px] ${bar.className}`} />
+          {bar.label}
+        </dt>
+        <dd className='text-right'>{formatMs(phases[bar.key])}</dd>
+      </div>
+    ))}
+    <dt className='text-muted'>Total</dt>
+    <dd className='text-right'>{formatMs(total)}</dd>
+  </dl>
+)
+
+const topErrorOf = (result: TargetResult | undefined) => {
   const error = result?.summary?.topError
-  if (!error) return <span className='text-faint'>—</span>
-  const download = result.downloads.find((d) => d.errorKind)
+  if (!error) return null
   const sample =
     result.attempts.find((a) => a.errorKind === error.kind)?.errorMessage ??
-    download?.errorMessage ??
+    result.downloads.find((d) => d.errorKind)?.errorMessage ??
     null
-  const label = describeError(error.kind, error.phase)
-  const count = error.count > 1 ? ` ×${error.count}` : ''
-  return sample ? (
-    <Tooltip content={<span className='font-mono text-[11.5px]'>{sample}</span>}>
-      <span className='text-secondary'>
-        {label}
-        <span className='text-faint'>{count}</span>
-      </span>
-    </Tooltip>
-  ) : (
-    <span className='text-secondary'>{label}</span>
+  return { ...error, sample }
+}
+
+const ErrorCell = ({ result }: { result: TargetResult | undefined }) => {
+  const error = topErrorOf(result)
+  if (!error) return <span className='text-faint'>—</span>
+  return (
+    <span className='text-secondary'>
+      {describeError(error.kind, error.phase)}
+      {error.count > 1 && <span className='text-faint'> ×{error.count}</span>}
+    </span>
   )
 }
 
@@ -122,20 +122,19 @@ const num = 'text-right font-mono text-[12px] tabular-nums text-secondary'
 const RateCell = ({ download }: { download: DownloadResult | undefined }) => {
   if (!download) return <span className='text-faint'>—</span>
   if (!download.throughput) {
-    return download.errorKind ? (
-      <span className='text-faint'>{describeError(download.errorKind, null)}</span>
-    ) : (
-      <span className='text-faint'>—</span>
+    return (
+      <span className='text-faint'>
+        {download.errorKind ? describeError(download.errorKind, null) : '—'}
+      </span>
     )
   }
-  const rate = formatRate(download.throughput.bytesPerSecond)
-  return (
-    <Tooltip
-      content={`${rate.mbs} · ${formatBytes(download.throughput.bytes)} in ${download.throughput.transferSeconds}s`}
-    >
-      <span>{rate.mbps}</span>
-    </Tooltip>
-  )
+  return formatRate(download.throughput.bytesPerSecond).mbps
+}
+
+const rateDetail = (download: DownloadResult | undefined) => {
+  if (!download?.throughput) return null
+  const { bytes, bytesPerSecond, transferSeconds } = download.throughput
+  return `${formatRate(bytesPerSecond).mbs} · ${formatBytes(bytes)} in ${transferSeconds}s`
 }
 
 interface Row {
@@ -182,6 +181,10 @@ const columnsFor = (mode: RunMode, scale: number): DataTableColumn<Row>[] => {
     id: 'error',
     header: 'Failure',
     cell: ({ entry }) => <ErrorCell result={entry?.result} />,
+    tooltip: ({ entry }) => {
+      const sample = topErrorOf(entry?.result)?.sample
+      return sample ? <span className='font-mono text-[11.5px]'>{sample}</span> : null
+    },
   }
 
   if (mode === 'download') {
@@ -204,6 +207,8 @@ const columnsFor = (mode: RunMode, scale: number): DataTableColumn<Row>[] => {
         cell: ({ entry }) => (
           <RateCell download={entry?.result.downloads.find((d) => d.mode === 'single')} />
         ),
+        tooltip: ({ entry }) =>
+          rateDetail(entry?.result.downloads.find((d) => d.mode === 'single')),
       },
       {
         id: 'multi',
@@ -212,6 +217,7 @@ const columnsFor = (mode: RunMode, scale: number): DataTableColumn<Row>[] => {
         cell: ({ entry }) => (
           <RateCell download={entry?.result.downloads.find((d) => d.mode === 'multi')} />
         ),
+        tooltip: ({ entry }) => rateDetail(entry?.result.downloads.find((d) => d.mode === 'multi')),
       },
       {
         id: 'ttfb',
@@ -256,6 +262,12 @@ const columnsFor = (mode: RunMode, scale: number): DataTableColumn<Row>[] => {
     {
       id: 'waterfall',
       header: 'Phases',
+      tooltip: ({ entry }) => {
+        const s = entry?.result.summary
+        return s && hasTiming(s.median.total, scale) ? (
+          <WaterfallDetail phases={s.median} total={s.median.total} />
+        ) : null
+      },
       cell: ({ entry }) => {
         const s = entry?.result.summary
         return (

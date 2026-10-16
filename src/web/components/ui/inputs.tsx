@@ -2,8 +2,7 @@ import { Checkbox as BaseCheckbox } from '@base-ui/react/checkbox'
 import { Select as BaseSelect } from '@base-ui/react/select'
 import { Toggle } from '@base-ui/react/toggle'
 import { ToggleGroup } from '@base-ui/react/toggle-group'
-import { Tooltip as BaseTooltip } from '@base-ui/react/tooltip'
-import type { ReactElement, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 
 const popupMotion =
   'origin-[var(--transform-origin)] transition-[opacity,scale] duration-150 ease-[cubic-bezier(0.2,0,0,1)] data-[ending-style]:scale-[0.97] data-[ending-style]:opacity-0 data-[ending-style]:duration-100 data-[starting-style]:scale-[0.97] data-[starting-style]:opacity-0'
@@ -180,26 +179,3 @@ export const Checkbox = ({
     </BaseCheckbox.Indicator>
   </BaseCheckbox.Root>
 )
-
-interface TooltipProps {
-  children: ReactElement<Record<string, unknown>>
-  content: ReactNode
-}
-
-/** Hover hint: appears after a short delay, leaves immediately. */
-export const Tooltip = ({ children, content }: TooltipProps) => (
-  <BaseTooltip.Root>
-    <BaseTooltip.Trigger delay={300} render={children} />
-    <BaseTooltip.Portal>
-      <BaseTooltip.Positioner className='z-50' sideOffset={6}>
-        <BaseTooltip.Popup
-          className={`max-w-sm rounded-md border border-line bg-surface px-2.5 py-1.5 text-[12px] leading-5 text-secondary shadow-popup ${popupMotion}`}
-        >
-          {content}
-        </BaseTooltip.Popup>
-      </BaseTooltip.Positioner>
-    </BaseTooltip.Portal>
-  </BaseTooltip.Root>
-)
-
-export const TooltipProvider = BaseTooltip.Provider
