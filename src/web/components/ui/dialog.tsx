@@ -47,7 +47,8 @@ export const DetailDialog = ({ children, meta, onOpenChange, open, title }: Deta
               </svg>
             </Dialog.Close>
           </header>
-          <div className='min-h-0 overflow-y-auto'>{children}</div>
+          {/* Sticky table headers inside the dialog stick to the top of its own scroll area. */}
+          <div className='min-h-0 overflow-y-auto [--page-header-height:0px]'>{children}</div>
         </Dialog.Popup>
       </Dialog.Portal>
     </Dialog.Root>

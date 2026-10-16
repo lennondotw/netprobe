@@ -169,17 +169,20 @@ const Connectivity = ({
   return (
     <>
       <PageHeader
+        leading={
+          // Leading slot: switching modes shows or hides Repeats, which must not move this control.
+          config.modules.downloads && (
+            <Segmented
+              disabled={running}
+              label='Mode'
+              onChange={setMode}
+              options={modes}
+              value={mode}
+            />
+          )
+        }
         actions={
           <>
-            {config.modules.downloads && (
-              <Segmented
-                disabled={running}
-                label='Mode'
-                onChange={setMode}
-                options={modes}
-                value={mode}
-              />
-            )}
             <Select
               disabled={running}
               label='Egress'

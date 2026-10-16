@@ -129,7 +129,8 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
         </nav>
         <RuntimeFooter />
       </div>
-      <main className='flex min-w-0 flex-1 flex-col bg-canvas'>{children}</main>
+      {/* Room below the last row, so lists do not end flush against the window edge. */}
+      <main className='flex min-w-0 flex-1 flex-col bg-canvas pb-16'>{children}</main>
     </div>
   )
 }

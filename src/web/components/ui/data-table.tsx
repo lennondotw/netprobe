@@ -1,4 +1,11 @@
-import type { KeyboardEvent, MouseEvent, ReactNode } from 'react'
+import {
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 
 import { gutter } from './layout.ts'
 import { TooltipTrigger } from './tooltip.tsx'
@@ -65,6 +72,7 @@ export const DataTable = <Row,>({
   groups,
   selectedRowId = null,
 }: DataTableProps<Row>) => {
+  const sticky = useStickyHeader()
   const sections: readonly DataTableGroup<Row>[] = groups ?? [
     { id: 'all', header: null, label, rows: rows ?? [] },
   ]
@@ -81,86 +89,123 @@ export const DataTable = <Row,>({
     onRowOpen(row)
   }
 
-  return (
-    <div className='@container overflow-x-auto'>
-      <table aria-label={label} className='w-full border-collapse text-left'>
-        <thead>
-          <tr className='border-b border-line bg-surface-subtle'>
-            {columns.map((column) => (
-              <th
-                className={`${cellBase} relative h-7 text-[11.5px] font-medium text-muted after:absolute after:inset-y-1.5 after:right-0 after:w-px after:bg-line last:after:hidden ${column.className ?? ''}`}
-                key={column.id}
-                scope='col'
-              >
-                {column.header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        {sections.map((section) => (
-          <tbody aria-label={groups ? section.label : undefined} key={section.id}>
-            {section.header !== null && (
-              <tr className='border-b border-line bg-surface-subtle'>
-                <th
-                  className='h-9 p-0 text-left font-normal'
-                  colSpan={columns.length}
-                  scope='rowgroup'
-                >
-                  {/*
-                   * Pinned to the scroll container's visible width, so trailing controls stay in
-                   * view when the table is wider than the screen and scrolls sideways.
-                   */}
-                  <div
-                    className={`sticky left-0 flex w-[100cqw] min-w-0 items-center gap-2 py-1.5 text-[12.5px] font-medium ${gutter}`}
-                  >
-                    {section.header}
-                  </div>
-                </th>
-              </tr>
-            )}
-            {section.rows.map((row, index) => {
-              const id = getRowId(row)
-              const selected = id === selectedRowId
-              // Zebra by position within the group, so the group header row does not shift it.
-              const zebra = index % 2 === 1 ? 'bg-surface-subtle' : ''
+  const headerCells = (
+    <tr>
+      {columns.map((column) => (
+        <th
+          className={`${cellBase} relative h-7 text-[11.5px] font-medium text-muted after:absolute after:inset-y-1.5 after:right-0 after:w-px after:bg-line last:after:hidden ${column.className ?? ''}`}
+          key={column.id}
+          scope='col'
+        >
+          {column.header}
+        </th>
+      ))}
+    </tr>
+  )
 
-              return (
-                <tr
-                  data-selected={selected || undefined}
-                  className={`snap h-8 border-b border-line-subtle align-middle text-[12.5px] ${
-                    selected ? 'bg-accent-soft' : `${zebra} hover:bg-hover`
-                  }`}
-                  key={id}
-                  onClick={(event) => openFromRow(event, row)}
-                >
-                  {columns.map((column) => (
-                    <Cell
-                      className={`${cellBase} py-1 ${column.className ?? ''}`}
-                      key={column.id}
-                      tooltip={column.tooltip?.(row) ?? null}
-                      tooltipGroup={`cell:${column.id}`}
+  return (
+    <div>
+      {/*
+       * The visible header. It sits outside the horizontal scroll container so it can stick below
+       * the page header (a scroll container would capture it), and mirrors the table's measured
+       * column widths and horizontal scroll position.
+       */}
+      <div
+        aria-hidden='true'
+        className='sticky top-[var(--page-header-height,0px)] z-10 overflow-hidden border-b border-line bg-surface-subtle'
+      >
+        <table
+          className='table-fixed border-collapse text-left'
+          ref={sticky.headerRef}
+          style={{ width: sticky.tableWidth || undefined }}
+        >
+          {sticky.widths.length === columns.length && (
+            <colgroup>
+              {sticky.widths.map((width, index) => (
+                <col key={index} style={{ width }} />
+              ))}
+            </colgroup>
+          )}
+          <thead>{headerCells}</thead>
+        </table>
+      </div>
+      <div
+        className='@container overflow-x-auto'
+        onScroll={sticky.onScroll}
+        ref={sticky.containerRef}
+      >
+        <table
+          aria-label={label}
+          className='w-full border-collapse text-left'
+          ref={sticky.tableRef}
+        >
+          {/* The real header: sizes and labels the columns, but takes no height. */}
+          <thead className='[visibility:collapse]'>{headerCells}</thead>
+          {sections.map((section) => (
+            <tbody aria-label={groups ? section.label : undefined} key={section.id}>
+              {section.header !== null && (
+                <tr className='border-b border-line bg-surface-subtle'>
+                  <th
+                    className='h-9 p-0 text-left font-normal'
+                    colSpan={columns.length}
+                    scope='rowgroup'
+                  >
+                    {/*
+                     * Pinned to the scroll container's visible width, so trailing controls stay in
+                     * view when the table is wider than the screen and scrolls sideways.
+                     */}
+                    <div
+                      className={`sticky left-0 flex w-[100cqw] min-w-0 items-center gap-2 py-1.5 text-[12.5px] font-medium ${gutter}`}
                     >
-                      {column.primary && onRowOpen ? (
-                        <button
-                          aria-haspopup='dialog'
-                          data-row-trigger=''
-                          className='-mx-1 rounded-sm px-1 text-left'
-                          onKeyDown={(event) => openFromKeyboard(event, row)}
-                          type='button'
-                        >
-                          {column.cell(row)}
-                        </button>
-                      ) : (
-                        column.cell(row)
-                      )}
-                    </Cell>
-                  ))}
+                      {section.header}
+                    </div>
+                  </th>
                 </tr>
-              )
-            })}
-          </tbody>
-        ))}
-      </table>
+              )}
+              {section.rows.map((row, index) => {
+                const id = getRowId(row)
+                const selected = id === selectedRowId
+                // Zebra by position within the group, so the group header row does not shift it.
+                const zebra = index % 2 === 1 ? 'bg-surface-subtle' : ''
+
+                return (
+                  <tr
+                    data-selected={selected || undefined}
+                    className={`snap h-8 border-b border-line-subtle align-middle text-[12.5px] ${
+                      selected ? 'bg-accent-soft' : `${zebra} hover:bg-hover`
+                    }`}
+                    key={id}
+                    onClick={(event) => openFromRow(event, row)}
+                  >
+                    {columns.map((column) => (
+                      <Cell
+                        className={`${cellBase} py-1 ${column.className ?? ''}`}
+                        key={column.id}
+                        tooltip={column.tooltip?.(row) ?? null}
+                        tooltipGroup={`cell:${column.id}`}
+                      >
+                        {column.primary && onRowOpen ? (
+                          <button
+                            aria-haspopup='dialog'
+                            data-row-trigger=''
+                            className='-mx-1 rounded-sm px-1 text-left'
+                            onKeyDown={(event) => openFromKeyboard(event, row)}
+                            type='button'
+                          >
+                            {column.cell(row)}
+                          </button>
+                        ) : (
+                          column.cell(row)
+                        )}
+                      </Cell>
+                    ))}
+                  </tr>
+                )
+              })}
+            </tbody>
+          ))}
+        </table>
+      </div>
     </div>
   )
 }
@@ -187,3 +232,46 @@ const Cell = ({
       render={<td className={className}>{children}</td>}
     />
   )
+
+/**
+ * Keeps the detached sticky header in step with the table: column widths (measured from the
+ * collapsed real header, which the browser still lays out) and horizontal scroll position.
+ */
+const useStickyHeader = () => {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const tableRef = useRef<HTMLTableElement>(null)
+  const headerRef = useRef<HTMLTableElement>(null)
+  const [layout, setLayout] = useState<{ widths: number[]; tableWidth: number }>({
+    widths: [],
+    tableWidth: 0,
+  })
+
+  useLayoutEffect(() => {
+    const table = tableRef.current
+    if (!table) return
+    const measure = () => {
+      const cells = [...(table.tHead?.rows[0]?.cells ?? [])]
+      const widths = cells.map((cell) => cell.getBoundingClientRect().width)
+      const tableWidth = table.getBoundingClientRect().width
+      setLayout((current) =>
+        current.tableWidth === tableWidth &&
+        current.widths.length === widths.length &&
+        current.widths.every((w, i) => w === widths[i])
+          ? current
+          : { widths, tableWidth },
+      )
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(table)
+    measure()
+    return () => observer.disconnect()
+  })
+
+  const onScroll = () => {
+    const header = headerRef.current
+    const container = containerRef.current
+    if (header && container) header.style.transform = `translateX(${-container.scrollLeft}px)`
+  }
+
+  return { containerRef, tableRef, headerRef, onScroll, ...layout }
+}

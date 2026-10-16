@@ -6,6 +6,7 @@ import { Badge, StatusDot } from '../components/ui/badge.tsx'
 import { Callout } from '../components/ui/callout.tsx'
 import { buttonClass } from '../components/ui/controls.tsx'
 import { DataTable } from '../components/ui/data-table.tsx'
+import { EmptyState } from '../components/ui/empty-state.tsx'
 import { Select } from '../components/ui/inputs.tsx'
 import { gutter } from '../components/ui/layout.ts'
 import { Row, SectionLabel } from '../components/ui/list.tsx'
@@ -148,11 +149,11 @@ const Egress = ({ config }: { config: AppConfig }) => {
 
       {stored.isPending && <ListSkeleton groups={1} rows={4} />}
       {!stored.isPending && !report && !check.isPending && (
-        <p className={`py-8 text-[12.5px] leading-5 text-muted ${gutter}`}>
-          Ask about 16 independent services where this host’s traffic appears to come from, look up
-          the reputation of each address they report, and identify the DNS resolvers in use. Each
-          check sends a few small requests to third-party services.
-        </p>
+        <EmptyState title='No check yet'>
+          Asks about 16 independent services where this host’s traffic appears to come from, looks
+          up the reputation of each address they report, and identifies the DNS resolvers in use.
+          Each check sends a few small requests to those services.
+        </EmptyState>
       )}
       {check.isPending && !report && <ListSkeleton groups={2} rows={5} />}
       {report && <Report report={report} />}
@@ -578,6 +579,15 @@ const BrowserSection = ({
           {pending ? 'Checking…' : result ? 'Check again' : 'Check this browser'}
         </button>
       </div>
+      {!result && (
+        <EmptyState
+          title={pending ? 'Checking this browser…' : 'This browser has not been checked'}
+        >
+          Shows the public address this device uses over HTTP and the addresses WebRTC exposes to
+          any web page, which can differ when a VPN or proxy only covers part of its traffic. Runs
+          in your browser and contacts ipify, ipinfo.io, and public STUN servers.
+        </EmptyState>
+      )}
       {result && (
         <>
           <div className={`py-5 ${gutter}`}>
