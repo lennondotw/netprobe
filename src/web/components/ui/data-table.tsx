@@ -131,9 +131,14 @@ export const DataTable = <Row,>({
           <thead>{headerCells}</thead>
         </table>
       </div>
-      {/* Native scrollbar hidden: each section gets an overlay scrollbar instead. */}
+      {/*
+       * Horizontal scrolling only. overflow-x: auto alone makes overflow-y compute to auto too, and
+       * a pixel of vertical overflow (a scrollbar's hit band) would then let this box capture the
+       * wheel and stall page scrolling. The native scrollbar is hidden: each section has an
+       * overlay scrollbar instead.
+       */}
       <div
-        className='@container overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+        className='@container overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
         onScroll={sticky.onScroll}
         ref={sticky.containerRef}
       >
