@@ -6,10 +6,10 @@ import { createRoot } from 'react-dom/client'
 import { AppShell } from './components/shell.tsx'
 import { TooltipHost } from './components/ui/tooltip.tsx'
 import { usePathname } from './lib/router.tsx'
+import { ConnectivityPage } from './pages/connectivity.tsx'
 import { EgressPage } from './pages/egress.tsx'
 import { HistoryPage } from './pages/history.tsx'
 import { HostPage } from './pages/host.tsx'
-import { OverviewPage } from './pages/overview.tsx'
 import { RunPage } from './pages/run.tsx'
 
 const queryClient = new QueryClient({
@@ -23,7 +23,7 @@ const Routes = () => {
   if (pathname === '/runs') return <HistoryPage />
   if (pathname === '/host') return <HostPage />
   if (pathname === '/egress') return <EgressPage />
-  return <OverviewPage />
+  return <ConnectivityPage />
 }
 
 createRoot(document.getElementById('root')!).render(

@@ -264,8 +264,8 @@ export const HostPage = () => {
                     </Row>
                   ))}
                   <p className='pt-1 text-[12px] leading-5 text-muted'>
-                    Netprobe ignores these: each run uses the egress chosen on the Overview page. A
-                    TUN-mode proxy shows up as a tunnel interface and default route instead.
+                    Netprobe ignores these: each run uses the egress chosen on the Connectivity
+                    page. A TUN-mode proxy shows up as a tunnel interface and default route instead.
                   </p>
                 </Panel>
               ),

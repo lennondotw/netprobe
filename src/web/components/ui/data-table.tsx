@@ -138,6 +138,7 @@ export const DataTable = <Row,>({
                       className={`${cellBase} py-1 ${column.className ?? ''}`}
                       key={column.id}
                       tooltip={column.tooltip?.(row) ?? null}
+                      tooltipGroup={`cell:${column.id}`}
                     >
                       {column.primary && onRowOpen ? (
                         <button
@@ -164,17 +165,25 @@ export const DataTable = <Row,>({
   )
 }
 
+/** Cells of one column share a tooltip group, so moving along a column is instant but moving to
+ * another column's tooltips waits again. */
 const Cell = ({
   children,
   className,
   tooltip,
+  tooltipGroup,
 }: {
   children: ReactNode
   className: string
   tooltip: ReactNode
+  tooltipGroup: string
 }) =>
   tooltip === null ? (
     <td className={className}>{children}</td>
   ) : (
-    <TooltipTrigger content={tooltip} render={<td className={className}>{children}</td>} />
+    <TooltipTrigger
+      content={tooltip}
+      group={tooltipGroup}
+      render={<td className={className}>{children}</td>}
+    />
   )

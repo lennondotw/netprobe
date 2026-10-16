@@ -256,12 +256,13 @@ const Report = ({ report }: { report: IdentityReport }) => {
                       ) : (
                         <span className='flex flex-wrap items-center justify-end gap-x-3'>
                           {network.types.map((t) => (
-                            <span className='flex items-center gap-1' key={t.type}>
-                              {typeLabel(t.type)}
-                              <InfoHint label={`Sources for ${typeLabel(t.type)}`}>
-                                <Sources names={t.sources} />
-                              </InfoHint>
-                            </span>
+                            <InfoHint
+                              key={t.type}
+                              label={`Sources for ${typeLabel(t.type)}`}
+                              text={typeLabel(t.type)}
+                            >
+                              <Sources names={t.sources} />
+                            </InfoHint>
                           ))}
                         </span>
                       )}
@@ -283,12 +284,13 @@ const Report = ({ report }: { report: IdentityReport }) => {
                       <Row key={network.key} label={networkName(network)}>
                         <span className='flex flex-wrap items-center justify-end gap-x-3'>
                           {network.flags.map((f) => (
-                            <span className='flex items-center gap-1' key={f.flag}>
-                              {flagLabels[f.flag]}
-                              <InfoHint label={`Sources flagging ${flagLabels[f.flag]}`}>
-                                <Sources names={f.sources} />
-                              </InfoHint>
-                            </span>
+                            <InfoHint
+                              key={f.flag}
+                              label={`Sources flagging ${flagLabels[f.flag]}`}
+                              text={flagLabels[f.flag]}
+                            >
+                              <Sources names={f.sources} />
+                            </InfoHint>
                           ))}
                           {risk !== null && (
                             <span className='flex items-center gap-1.5'>

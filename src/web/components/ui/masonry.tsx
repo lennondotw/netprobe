@@ -48,7 +48,8 @@ export const Masonry = ({ items, minColumnWidth = 400 }: MasonryProps) => {
 
   return (
     <div
-      className='grid items-start'
+      // Columns stretch to the tallest one so the vertical rules run the full height.
+      className='grid'
       ref={ref}
       style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }}
     >

@@ -23,14 +23,14 @@ const ipFamilies = [
   { value: 'ipv6', label: 'IPv6' },
 ] as const
 
-export const OverviewPage = () => {
+export const ConnectivityPage = () => {
   const config = useConfig()
   const latest = useLatest()
 
   if (config.error) {
     return (
       <>
-        <PageHeader title='Overview' />
+        <PageHeader title='Connectivity' />
         <Callout role='alert' title='Could not load configuration' tone='danger'>
           {config.error.message}
         </Callout>
@@ -40,12 +40,12 @@ export const OverviewPage = () => {
   if (!config.data) {
     return (
       <>
-        <PageHeader title='Overview' />
+        <PageHeader title='Connectivity' />
         <ListSkeleton />
       </>
     )
   }
-  return <Overview config={config.data} latest={latest.data ?? []} />
+  return <Connectivity config={config.data} latest={latest.data ?? []} />
 }
 
 const allCategories = 'All'
@@ -57,7 +57,13 @@ const isEligible = (target: TargetInfo, mode: RunMode, viaProxy: boolean) => {
   return target.kind === 'http' || !viaProxy
 }
 
-const Overview = ({ config, latest }: { config: AppConfig; latest: readonly LatestResult[] }) => {
+const Connectivity = ({
+  config,
+  latest,
+}: {
+  config: AppConfig
+  latest: readonly LatestResult[]
+}) => {
   const queryClient = useQueryClient()
   const [chosenMode, setMode] = useState<RunMode>('quick')
   const [egressId, setEgressId] = useState(config.defaults.egressId)
@@ -214,12 +220,12 @@ const Overview = ({ config, latest }: { config: AppConfig; latest: readonly Late
                 <svg aria-hidden='true' className='size-3 fill-current' viewBox='0 0 12 12'>
                   <path d='M3 2.2v7.6a.5.5 0 0 0 .76.43l6.2-3.8a.5.5 0 0 0 0-.86l-6.2-3.8A.5.5 0 0 0 3 2.2Z' />
                 </svg>
-                Run test
+                Run selected ({selectedTargets.length})
               </button>
             )}
           </>
         }
-        title='Overview'
+        title='Connectivity'
       />
       <div className='relative'>
         <Toolbar>

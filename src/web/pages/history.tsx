@@ -159,7 +159,7 @@ export const HistoryPage = () => {
           ]}
           empty={
             <div className={`py-10 text-center text-[12.5px] text-muted ${gutter}`}>
-              No runs yet. Start one from the Overview page.
+              No runs yet. Start one from the Connectivity page.
             </div>
           }
           getRowId={(run) => run.id}

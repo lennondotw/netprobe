@@ -7,7 +7,7 @@ import { StatusDot } from './ui/badge.tsx'
 const navItems = [
   {
     href: '/',
-    label: 'Overview',
+    label: 'Connectivity',
     icon: <path d='M2.5 13.5h11M4 11V7m4 4V3.5m4 7.5V6' />,
   },
   {
@@ -72,7 +72,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
   const pathname = usePathname()
   return (
     <div className='flex min-h-screen w-full flex-col lg:flex-row'>
-      <div className='flex shrink-0 flex-col border-b border-line bg-sidebar lg:sticky lg:top-0 lg:h-screen lg:w-56 lg:border-r lg:border-b-0'>
+      <div className='flex shrink-0 flex-col border-b border-line bg-sidebar lg:sticky lg:top-0 lg:h-screen lg:w-48 lg:border-r lg:border-b-0'>
         <div className='flex h-12 items-center gap-2.5 px-4'>
           <span
             aria-hidden='true'
