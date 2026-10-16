@@ -45,7 +45,8 @@ export const buildApp = async ({ config, store, runner, runtime, webRoot, logger
       : false,
   })
 
-  app.get('/api/health', async () => ({ ok: true }))
+  // Polled by the container health check; logging every probe would bury useful lines.
+  app.get('/api/health', { logLevel: 'silent' }, async () => ({ ok: true }))
 
   app.get('/api/config', async (): Promise<AppConfig> => ({
     services: config.services.map((service) => ({
