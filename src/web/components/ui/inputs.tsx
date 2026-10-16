@@ -179,3 +179,43 @@ export const Checkbox = ({
     </BaseCheckbox.Indicator>
   </BaseCheckbox.Root>
 )
+
+interface TabBarProps<Value extends string> {
+  label: string
+  value: Value
+  options: readonly { value: Value; label: ReactNode; count?: number }[]
+  onChange: (value: Value) => void
+}
+
+/** View tabs for a toolbar: quiet until hovered, the selected tab lifts onto the surface. */
+export const TabBar = <Value extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: TabBarProps<Value>) => (
+  <ToggleGroup
+    aria-label={label}
+    className='-mx-1 flex min-w-0 flex-wrap items-center gap-0.5'
+    onValueChange={(next) => {
+      const picked = next[0]
+      if (picked) onChange(picked as Value)
+    }}
+    value={[value]}
+  >
+    {options.map((option) => (
+      <Toggle
+        className='group snap inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-transparent px-2.5 text-[12.5px] font-medium whitespace-nowrap text-muted outline-none hover:bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent data-[pressed]:border-line data-[pressed]:bg-surface data-[pressed]:text-foreground data-[pressed]:shadow-raised'
+        key={option.value}
+        value={option.value}
+      >
+        {option.label}
+        {option.count !== undefined && (
+          <span className='snap-group text-[11.5px] font-normal text-faint tabular-nums'>
+            {option.count}
+          </span>
+        )}
+      </Toggle>
+    ))}
+  </ToggleGroup>
+)

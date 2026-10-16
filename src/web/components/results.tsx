@@ -2,6 +2,7 @@ import type {
   Attempt,
   DownloadResult,
   RunMode,
+  ProbeKind,
   ServiceInfo,
   TargetInfo,
   TargetResult,
@@ -106,9 +107,38 @@ const topErrorOf = (result: TargetResult | undefined) => {
   return { ...error, sample }
 }
 
-const ErrorCell = ({ result }: { result: TargetResult | undefined }) => {
+const kindLabel: Record<ProbeKind, string> = {
+  http: 'HTTP',
+  tcp: 'TCP',
+  dns: 'DNS',
+  dot: 'DoT',
+  stun: 'STUN',
+  quic: 'QUIC',
+  icmp: 'ICMP',
+}
+
+const KindTag = ({ kind }: { kind: ProbeKind }) => (
+  <span className='inline-flex h-4 shrink-0 items-center self-center rounded-[4px] border border-line px-1 font-mono text-[10px] leading-none text-muted'>
+    {kindLabel[kind]}
+  </span>
+)
+
+const hasFakeIp = (detail: string) => detail.split(/[\s,]+/).some(isFakeIp)
+
+/** The most common failure, or for healthy probes the detail they reported (mapped address, answer). */
+const DetailCell = ({ result }: { result: TargetResult | undefined }) => {
   const error = topErrorOf(result)
-  if (!error) return <span className='text-faint'>—</span>
+  if (!error) {
+    const detail = result?.summary?.details[0]
+    if (!detail) return <span className='text-faint'>—</span>
+    return (
+      <span
+        className={`block max-w-56 truncate font-mono text-[11.5px] ${hasFakeIp(detail) ? 'text-warning' : 'text-muted'}`}
+      >
+        {detail}
+      </span>
+    )
+  }
   return (
     <span className='text-secondary'>
       {describeError(error.kind, error.phase)}
@@ -150,6 +180,7 @@ const columnsFor = (mode: RunMode, scale: number): DataTableColumn<Row>[] => {
     cell: ({ target }) => (
       <span className='flex min-w-0 items-baseline gap-2'>
         <span className='font-medium text-foreground'>{target.name}</span>
+        {target.kind !== 'http' && <KindTag kind={target.kind} />}
         <span className='max-w-56 truncate font-mono text-[11.5px] text-faint'>
           {hostOf(target.url)}
         </span>
@@ -178,12 +209,26 @@ const columnsFor = (mode: RunMode, scale: number): DataTableColumn<Row>[] => {
       ),
   }
   const error: DataTableColumn<Row> = {
-    id: 'error',
-    header: 'Failure',
-    cell: ({ entry }) => <ErrorCell result={entry?.result} />,
+    id: 'detail',
+    header: 'Detail',
+    cell: ({ entry }) => <DetailCell result={entry?.result} />,
     tooltip: ({ entry }) => {
       const sample = topErrorOf(entry?.result)?.sample
-      return sample ? <span className='font-mono text-[11.5px]'>{sample}</span> : null
+      if (sample) return <span className='font-mono text-[11.5px]'>{sample}</span>
+      const details = entry?.result.summary?.details ?? []
+      if (details.length === 0) return null
+      return (
+        <div className='grid gap-0.5'>
+          {details.map((d) => (
+            <span className='font-mono text-[11.5px]' key={d}>
+              {d}
+            </span>
+          ))}
+          {details.some(hasFakeIp) && (
+            <span className='text-warning'>Fake-IP answer: DNS is intercepted locally</span>
+          )}
+        </div>
+      )
     },
   }
 
@@ -260,6 +305,12 @@ const columnsFor = (mode: RunMode, scale: number): DataTableColumn<Row>[] => {
       cell: ({ entry }) => formatMs(entry?.result.summary?.median.total),
     },
     {
+      id: 'jitter',
+      header: 'Jitter',
+      className: num,
+      cell: ({ entry }) => formatMs(entry?.result.summary?.jitter),
+    },
+    {
       id: 'waterfall',
       header: 'Phases',
       tooltip: ({ entry }) => {
@@ -294,10 +345,18 @@ interface ServiceResultsProps {
     toggle: (serviceId: string, checked: boolean) => void
     disabled: boolean
   }
+  /** When provided, each group header gets a button that runs just that service. */
+  runService?: { run: (serviceId: string) => void; disabled: boolean }
 }
 
 /** Every service as a group header followed by a dense table of its targets. */
-export const ServiceResults = ({ services, mode, results, selection }: ServiceResultsProps) => {
+export const ServiceResults = ({
+  services,
+  mode,
+  results,
+  selection,
+  runService,
+}: ServiceResultsProps) => {
   const dialog = useDetailDialog<Row>()
   const visible = services
     .map((service) => ({
@@ -354,7 +413,22 @@ export const ServiceResults = ({ services, mode, results, selection }: ServiceRe
               <StatusDot tone='success' />
               All healthy
             </span>
-          ) : null}
+          ) : (
+            <span className='ml-auto' />
+          )}
+          {runService && (
+            <button
+              className='snap -my-1 -mr-1.5 inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-[12px] font-normal text-muted hover:bg-hover hover:text-foreground disabled:pointer-events-none disabled:opacity-40'
+              disabled={runService.disabled}
+              onClick={() => runService.run(service.id)}
+              type='button'
+            >
+              <svg aria-hidden='true' className='size-2.5 fill-current' viewBox='0 0 12 12'>
+                <path d='M3 2.2v7.6a.5.5 0 0 0 .76.43l6.2-3.8a.5.5 0 0 0 0-.86l-6.2-3.8A.5.5 0 0 0 3 2.2Z' />
+              </svg>
+              Run
+            </button>
+          )}
         </>
       ),
     }
@@ -381,6 +455,27 @@ export const ServiceResults = ({ services, mode, results, selection }: ServiceRe
       </DetailDialog>
     </>
   )
+}
+
+const checkDescription = (target: TargetInfo) => {
+  switch (target.kind) {
+    case 'icmp':
+      return 'ICMP echo through the system ping'
+    case 'tcp':
+      return 'TCP connect, no data sent'
+    case 'dns':
+      return 'One DNS query over UDP; the answer is shown as the detail'
+    case 'dot':
+      return 'DNS query over TLS (port 853)'
+    case 'stun':
+      return 'STUN binding request; reports the public address UDP leaves from'
+    case 'quic':
+      return 'QUIC version negotiation: proves UDP reachability of a QUIC endpoint, without a handshake'
+    case 'http':
+      return target.check === 'reachability'
+        ? `Reachability — HTTP ${target.expectStatus.join('/')} proves the path, not the service`
+        : `Expects HTTP ${target.expectStatus.join('/')}`
+  }
 }
 
 const StatusBadge = ({ row }: { row: Row }) => {
@@ -415,6 +510,12 @@ const AttemptsTable = ({ attempts, label }: { attempts: readonly Attempt[]; labe
           ),
         },
         { id: 'status', header: 'HTTP', className: num, cell: (a) => a.httpStatus ?? '—' },
+        {
+          id: 'detail',
+          header: 'Detail',
+          className: 'font-mono text-[11.5px] text-muted',
+          cell: (a) => a.detail ?? '—',
+        },
         {
           id: 'ip',
           header: 'Remote',
@@ -455,11 +556,7 @@ const TargetDetail = ({ row }: { row: Row }) => {
           <Row label='URL'>
             <span className='font-mono text-[11.5px] break-all select-text'>{target.url}</span>
           </Row>
-          <Row label='Check'>
-            {target.check === 'reachability'
-              ? `Reachability — HTTP ${target.expectStatus.join('/')} proves the path, not the service`
-              : `Expects HTTP ${target.expectStatus.join('/')}`}
-          </Row>
+          <Row label='Check'>{checkDescription(target)}</Row>
           {entry?.at && <Row label='Measured'>{formatDateTime(entry.at)}</Row>}
           {result?.summary && result.summary.remoteIps.length > 0 && (
             <Row label='Remote IPs'>
@@ -469,6 +566,14 @@ const TargetDetail = ({ row }: { row: Row }) => {
                   Fake-IP range: answered by a local proxy
                 </span>
               )}
+            </Row>
+          )}
+          {result?.summary && result.summary.attempts > 0 && (
+            <Row label='Loss / jitter'>
+              <span className='font-mono text-[12px]'>
+                {Math.round((result.summary.failed / result.summary.attempts) * 100)}% /{' '}
+                {formatMs(result.summary.jitter)}
+              </span>
             </Row>
           )}
           {result?.summary && (

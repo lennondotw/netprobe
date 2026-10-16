@@ -1,11 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 
-import type { AppConfig, IpFamily, LatestResult, RunMode } from '../../shared/types.ts'
+import type { AppConfig, IpFamily, LatestResult, RunMode, TargetInfo } from '../../shared/types.ts'
 import { type ResultEntry, ServiceResults } from '../components/results.tsx'
 import { Callout } from '../components/ui/callout.tsx'
 import { buttonClass } from '../components/ui/controls.tsx'
-import { Segmented, Select } from '../components/ui/inputs.tsx'
+import { Segmented, Select, TabBar } from '../components/ui/inputs.tsx'
 import { MetaList, PageHeader, Toolbar } from '../components/ui/page-header.tsx'
 import { ListSkeleton } from '../components/ui/skeleton.tsx'
 import { cancelRun, queryKeys, startRun, useConfig, useLatest } from '../lib/api.ts'
@@ -48,6 +48,18 @@ export const OverviewPage = () => {
   return <Overview config={config.data} latest={latest.data ?? []} />
 }
 
+const allCategories = 'All'
+
+/** Mirrors the server: socket probes cannot go through a proxy, downloads only run in download mode. */
+const isEligible = (target: TargetInfo, mode: RunMode, viaProxy: boolean) => {
+  if (mode === 'download') return target.download !== null
+  if (target.download) return false
+  return target.kind === 'http' || !viaProxy
+}
+
+const hasFakeIp = (values: readonly string[]) =>
+  values.some((value) => value.split(/[\s,]+/).some(isFakeIp))
+
 const Overview = ({ config, latest }: { config: AppConfig; latest: readonly LatestResult[] }) => {
   const queryClient = useQueryClient()
   const [chosenMode, setMode] = useState<RunMode>('quick')
@@ -57,6 +69,7 @@ const Overview = ({ config, latest }: { config: AppConfig; latest: readonly Late
   // Store what the user turned off, so services added to the config later start selected.
   const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set())
   const [startedRunId, setStartedRunId] = useState<string | null>(null)
+  const [category, setCategory] = useState(allCategories)
 
   const followedRunId = startedRunId ?? config.activeRunId
   const live = useRunStream(followedRunId)
@@ -76,14 +89,40 @@ const Overview = ({ config, latest }: { config: AppConfig; latest: readonly Late
   })
   const cancel = useMutation({ mutationFn: cancelRun })
 
+  const viaProxy = config.egress.find((e) => e.id === egressId)?.proxy != null
+  const eligible = (t: TargetInfo) => isEligible(t, mode, viaProxy)
+
+  // Categories in order of first appearance; services are shown grouped by category.
+  const categories = [...new Set(config.services.map((s) => s.category))]
+  const ordered = categories.flatMap((c) => config.services.filter((s) => s.category === c))
+  const visibleServices =
+    category === allCategories ? ordered : ordered.filter((s) => s.category === category)
+
   const selected = useMemo(
     () => new Set(config.services.map((s) => s.id).filter((id) => !excluded.has(id))),
     [config.services, excluded],
   )
-  const selectedTargets = config.services
+  const selectedTargets = visibleServices
     .filter((s) => selected.has(s.id))
     .flatMap((s) => s.targets)
-    .filter((t) => (mode === 'download' ? t.download : !t.download))
+    .filter(eligible)
+  const skippedForProxy = viaProxy
+    ? visibleServices
+        .filter((s) => selected.has(s.id))
+        .flatMap((s) => s.targets)
+        .filter((t) => !t.download && t.kind !== 'http').length
+    : 0
+
+  const run = (targetIds: string[]) =>
+    start.mutate({ mode, egressId, ipFamily, repeats: Number(repeats), targetIds })
+
+  const tabs = [allCategories, ...categories].map((value) => ({
+    value,
+    label: value,
+    count: (value === allCategories ? ordered : ordered.filter((s) => s.category === value))
+      .flatMap((s) => s.targets)
+      .filter(eligible).length,
+  }))
 
   const results = useMemo(() => {
     const map = new Map<string, ResultEntry>()
@@ -118,8 +157,10 @@ const Overview = ({ config, latest }: { config: AppConfig; latest: readonly Late
     { bytes: 0, unknown: 0 },
   )
 
-  const fakeIpTargets = [...results.values()].filter((entry) =>
-    entry.result.summary?.remoteIps.some(isFakeIp),
+  const fakeIpTargets = [...results.values()].filter(
+    (entry) =>
+      hasFakeIp(entry.result.summary?.remoteIps ?? []) ||
+      hasFakeIp(entry.result.summary?.details ?? []),
   ).length
 
   const egressOptions = config.egress.map((e) => ({
@@ -176,15 +217,7 @@ const Overview = ({ config, latest }: { config: AppConfig; latest: readonly Late
               <button
                 className={buttonClass.primary}
                 disabled={selectedTargets.length === 0 || start.isPending}
-                onClick={() =>
-                  start.mutate({
-                    mode,
-                    egressId,
-                    ipFamily,
-                    repeats: Number(repeats),
-                    targetIds: selectedTargets.map((t) => t.id),
-                  })
-                }
+                onClick={() => run(selectedTargets.map((t) => t.id))}
                 type='button'
               >
                 <svg aria-hidden='true' className='size-3 fill-current' viewBox='0 0 12 12'>
@@ -199,10 +232,16 @@ const Overview = ({ config, latest }: { config: AppConfig; latest: readonly Late
       />
       <div className='relative'>
         <Toolbar>
+          <TabBar label='Category' onChange={setCategory} options={tabs} value={category} />
+        </Toolbar>
+        <Toolbar>
           <MetaList>
             <span>
               {selectedTargets.length} {selectedTargets.length === 1 ? 'target' : 'targets'}
             </span>
+            {skippedForProxy > 0 && (
+              <span>{skippedForProxy} socket probes skipped: they cannot use a proxy</span>
+            )}
             {mode === 'download' && (
               <span>
                 ≈ {formatBytes(estimate.bytes)} traffic
@@ -280,7 +319,16 @@ const Overview = ({ config, latest }: { config: AppConfig; latest: readonly Late
               return next
             }),
         }}
-        services={config.services}
+        runService={{
+          disabled: running || start.isPending,
+          run: (serviceId) =>
+            run(
+              (config.services.find((s) => s.id === serviceId)?.targets ?? [])
+                .filter(eligible)
+                .map((t) => t.id),
+            ),
+        }}
+        services={visibleServices}
       />
     </>
   )

@@ -82,7 +82,7 @@ export const DataTable = <Row,>({
   }
 
   return (
-    <div className='overflow-x-auto'>
+    <div className='@container overflow-x-auto'>
       <table aria-label={label} className='w-full border-collapse text-left'>
         <thead>
           <tr className='border-b border-line bg-surface-subtle'>
@@ -102,11 +102,17 @@ export const DataTable = <Row,>({
             {section.header !== null && (
               <tr className='border-b border-line bg-surface-subtle'>
                 <th
-                  className={`h-9 py-1.5 text-left font-normal ${gutter}`}
+                  className='h-9 p-0 text-left font-normal'
                   colSpan={columns.length}
                   scope='rowgroup'
                 >
-                  <div className='flex min-w-0 items-center gap-2 text-[12.5px] font-medium'>
+                  {/*
+                   * Pinned to the scroll container's visible width, so trailing controls stay in
+                   * view when the table is wider than the screen and scrolls sideways.
+                   */}
+                  <div
+                    className={`sticky left-0 flex w-[100cqw] min-w-0 items-center gap-2 py-1.5 text-[12.5px] font-medium ${gutter}`}
+                  >
                     {section.header}
                   </div>
                 </th>

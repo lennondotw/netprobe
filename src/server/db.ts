@@ -5,6 +5,24 @@ import { DatabaseSync } from 'node:sqlite'
 import type { LatestResult, RunDetail, RunRecord, TargetResult } from '../shared/types.ts'
 
 /**
+ * Results stored by older versions lack fields added since. Fill them in on read so the rest of
+ * the app can rely on the current shape.
+ */
+const normalizeResult = (raw: string): TargetResult => {
+  const result = JSON.parse(raw) as TargetResult
+  const fixAttempt = (attempt: TargetResult['attempts'][number]) => {
+    attempt.detail ??= null
+  }
+  result.attempts.forEach(fixAttempt)
+  for (const download of result.downloads) download.attempts.forEach(fixAttempt)
+  if (result.summary) {
+    result.summary.jitter ??= null
+    result.summary.details ??= []
+  }
+  return result
+}
+
+/**
  * Run history in SQLite. Rows hold JSON documents; the columns only exist for ordering and
  * lookups, so the shapes in `shared/types.ts` stay the single source of truth.
  */
@@ -64,7 +82,7 @@ export class Store {
     const results = this.#db
       .prepare('SELECT result FROM results WHERE run_id = ?')
       .all(id)
-      .map((r) => JSON.parse(String(r.result)) as TargetResult)
+      .map((r) => normalizeResult(String(r.result)))
     return { ...(JSON.parse(String(row.record)) as RunRecord), results }
   }
 
@@ -89,7 +107,7 @@ export class Store {
           runId: run.id,
           createdAt: run.createdAt,
           egressId: run.params.egressId,
-          result: JSON.parse(String(row.result)) as TargetResult,
+          result: normalizeResult(String(row.result)),
         }
       })
   }
