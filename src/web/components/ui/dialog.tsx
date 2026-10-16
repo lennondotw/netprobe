@@ -56,7 +56,7 @@ export const DetailDialog = ({ children, meta, onOpenChange, open, title }: Deta
 
 /** A bordered block inside a detail dialog; consecutive sections are separated by a rule. */
 export const DetailSection = ({ children }: { children: ReactNode }) => (
-  <section className='grid gap-2.5 border-t border-line px-5 py-3.5 first:border-t-0'>
+  <section className='grid gap-2.5 border-t border-line px-5 py-3.5 first:border-t-0 last:pb-7'>
     {children}
   </section>
 )

@@ -14,6 +14,7 @@ import {
   formatRate,
   formatRelative,
   hostOf,
+  isFakeIp,
   statusOf,
 } from '../lib/format.ts'
 import { Badge, StatusDot, type Tone } from './ui/badge.tsx'
@@ -451,6 +452,11 @@ const TargetDetail = ({ row }: { row: Row }) => {
           {result?.summary && result.summary.remoteIps.length > 0 && (
             <Row label='Remote IPs'>
               <span className='font-mono text-[11.5px]'>{result.summary.remoteIps.join(', ')}</span>
+              {result.summary.remoteIps.some(isFakeIp) && (
+                <span className='block text-[11.5px] text-warning'>
+                  Fake-IP range: answered by a local proxy
+                </span>
+              )}
             </Row>
           )}
           {result?.summary && (

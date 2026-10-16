@@ -129,3 +129,13 @@ export const statusOf = (target: TargetInfo, result: TargetResult | undefined): 
       return { label: 'Running', tone: 'info' }
   }
 }
+
+/**
+ * 198.18.0.0/15 is reserved for benchmarking and is what proxy tools in fake-IP mode hand out
+ * from their DNS. Seeing it means a local proxy or TUN answers DNS and terminates TCP, so DNS and
+ * TCP timings describe that proxy, not the remote service.
+ */
+export const isFakeIp = (ip: string) => {
+  const [a, b] = ip.split('.').map(Number)
+  return a === 198 && (b === 18 || b === 19)
+}
