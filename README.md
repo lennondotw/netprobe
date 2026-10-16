@@ -162,7 +162,8 @@ the page can trigger measurements but cannot make the server request arbitrary a
 
 ## Safety
 
-- One run at a time. Downloads run one target at a time with a per-request size cap, and the UI
+- One run at a time: runs started by several viewers wait in a queue and start in order. Downloads
+  run one target at a time with a per-request size cap, and the UI
   shows the expected traffic before you start.
 - Proxy credentials and signed URL parameters are redacted before anything is stored, logged,
   or sent to the browser. Request logs contain only method, route, and status.
