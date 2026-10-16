@@ -5,9 +5,6 @@
   "description": "Self-hosted network diagnostics: probe reachability, latency, and throughput from the machine that runs it.",
   "license": "MIT",
   "type": "module",
-  "engines": {
-    "node": ">=24"
-  },
   "scripts": {
     "dev": "node scripts/dev.ts",
     "dev:server": "node --watch src/server/main.ts",
@@ -43,6 +40,9 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
     "vitest": "^5.0.5"
+  },
+  "engines": {
+    "node": ">=24"
   },
   "packageManager": "pnpm@10.33.0"
 }

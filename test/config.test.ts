@@ -91,3 +91,11 @@ describe('summaries', () => {
     expect(median([])).toBeNull()
   })
 })
+
+describe('example config', () => {
+  it('parses as shipped', async () => {
+    const { loadConfig } = await import('../src/server/config.ts')
+    const config = loadConfig('config/netprobe.example.yaml')
+    expect(config.egress[0]?.id).toBe('direct')
+  })
+})

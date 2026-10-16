@@ -30,7 +30,7 @@ const detectEnvironment = (): RuntimeInfo['environment'] => {
 }
 
 const runtime: RuntimeInfo = {
-  hostLabel: env.NETPROBE_HOST_LABEL ?? config.hostLabel ?? hostname(),
+  hostLabel: env.NETPROBE_HOST_LABEL || config.hostLabel || hostname(),
   environment: detectEnvironment(),
   platform: `${platform()} ${release()}`,
   curlVersion: await curlVersion(),

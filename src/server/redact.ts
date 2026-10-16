@@ -17,7 +17,7 @@ export const redactUrl = (raw: string): string => {
     url.username = url.username ? 'redacted' : ''
     url.password = ''
   }
-  for (const key of [...url.searchParams.keys()]) {
+  for (const key of Array.from(url.searchParams.keys())) {
     if (sensitiveParam.test(key)) url.searchParams.set(key, 'redacted')
   }
   return url.toString()

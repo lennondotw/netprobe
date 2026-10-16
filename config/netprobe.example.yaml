@@ -1,0 +1,82 @@
+# Copy to config/netprobe.yaml and edit. Every key is optional; without a config file the
+# built-in presets run over a direct connection.
+
+# Label shown in the UI and stored with each run. Defaults to the hostname.
+# hostLabel: build-runner
+
+probe:
+  repeats: 5 # attempts per target in a quick run
+  connectTimeoutMs: 5000
+  timeoutMs: 15000
+  concurrency: 4 # targets probed in parallel (downloads always run one at a time)
+
+download:
+  connections: 4 # connections for the parallel (range-split) measurement
+  timeoutMs: 120000
+  maxBytes: 209715200 # requests for anything larger are aborted
+
+# auto | ipv4 | ipv6 — the default in the UI; each run can override it.
+ipFamily: auto
+
+# Endpoint that echoes the public IP, as `ip=` lines or a bare address.
+egressCheckUrl: https://www.cloudflare.com/cdn-cgi/trace
+
+# Network exits to compare. The first entry is the default. Proxy credentials stay on the
+# server; the UI only shows scheme, host, and port.
+egress:
+  - id: direct
+    name: Direct
+  # - id: office-proxy
+  #   name: Office proxy
+  #   # socks5h resolves DNS on the proxy; socks5 resolves locally. Results can differ.
+  #   proxy: socks5h://10.0.0.2:1080
+  # - id: http-proxy
+  #   name: HTTP proxy
+  #   proxy: http://user:password@proxy.internal:3128
+
+presets:
+  # Hide built-in services: github, github-actions, aws, vercel, apple, npm, reference.
+  exclude: []
+
+# Add services, or targets to a built-in service by reusing its id.
+services: []
+#  - id: aws
+#    targets:
+#      - id: accelerate
+#        name: S3 Transfer Acceleration (my bucket)
+#        url: https://my-bucket.s3-accelerate.amazonaws.com/
+#        expectStatus: [403]
+#        check: reachability
+#      - id: distribution
+#        name: CloudFront distribution
+#        url: https://d1234example.cloudfront.net/health
+#
+#  - id: github-actions
+#    targets:
+#      - id: blob-sa7
+#        name: Blob storage (sa7)
+#        url: https://productionresultssa7.blob.core.windows.net/
+#        expectStatus: [400]
+#        check: reachability
+#
+#  - id: vercel
+#    targets:
+#      - id: app
+#        name: Production deployment
+#        url: https://my-app.vercel.app/
+#      - id: asset
+#        name: Static asset (10 MB)
+#        url: https://my-app.vercel.app/speedtest/10mb.bin
+#        download:
+#          bytes: 10485760 # exact size; anything else counts as a failed transfer
+#          parallel: range # or `none` if the server ignores Range requests
+#
+#  - id: internal
+#    name: Internal services
+#    description: Anything reachable over HTTP(S).
+#    targets:
+#      - id: registry
+#        name: Package mirror
+#        url: https://mirror.internal/healthz
+#        method: HEAD
+#        expectStatus: [200, 204]

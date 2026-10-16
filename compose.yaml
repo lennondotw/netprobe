@@ -1,0 +1,18 @@
+services:
+  netprobe:
+    build: .
+    image: netprobe:latest
+    init: true
+    restart: unless-stopped
+    ports:
+      - '${NETPROBE_PUBLISH_PORT:-8080}:8080'
+    environment:
+      # Shown in the UI and stored with every run; defaults to the container hostname.
+      NETPROBE_HOST_LABEL: ${NETPROBE_HOST_LABEL:-}
+    volumes:
+      - netprobe-data:/data
+      # Optional: put netprobe.yaml here. Without it only the built-in presets are used.
+      - ./config:/config:ro
+
+volumes:
+  netprobe-data:
