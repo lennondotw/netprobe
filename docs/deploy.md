@@ -16,6 +16,19 @@ interface only (say, behind a reverse proxy on the same machine), set `NETPROBE_
 `compose.yaml` is the bridge-network alternative. It publishes `NETPROBE_PUBLISH_PORT` and
 works everywhere, at the cost of measuring through Docker's NAT.
 
+## macOS, natively
+
+On a Mac, run Netprobe natively rather than in Docker, which would measure through a VM.
+[`deploy/dev.netprobe.plist`](../deploy/dev.netprobe.plist) is a LaunchAgent for a user with a
+login session. On a shared machine such as a CI runner, pick a port its jobs are unlikely to use
+and keep Node.js out of the global `PATH` if jobs should not find it: a Node.js tarball unpacked
+next to the checkout works, with `ProgramArguments` pointing at it. To update:
+
+```bash
+cd ~/netprobe && git pull && pnpm install --frozen-lockfile && pnpm build
+launchctl kickstart -k gui/$(id -u)/dev.netprobe
+```
+
 ## Updating
 
 ```bash
