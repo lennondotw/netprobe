@@ -55,7 +55,8 @@ services:
   netprobe:
     cap_add: [NET_ADMIN]
     networks:
-      default: {}
+      default:
+        gw_priority: 1 # the default route stays on the bridge
       lan:
         ipv4_address: 192.168.1.243 # a free address on the gateway's network
 networks:

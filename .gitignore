@@ -8,3 +8,6 @@ data/
 .env.*
 !.env.example
 config/netprobe.yaml
+
+# Local deployment overrides
+compose.override.yaml
