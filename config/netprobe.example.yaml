@@ -8,7 +8,7 @@ probe:
   repeats: 5 # attempts per target in a quick run
   connectTimeoutMs: 5000
   timeoutMs: 15000
-  concurrency: 4 # targets probed in parallel (downloads always run one at a time)
+  concurrency: 8 # targets probed in parallel (downloads always run one at a time)
 
 download:
   connections: 4 # connections for the parallel (range-split) measurement
@@ -35,10 +35,21 @@ egress:
   #   proxy: http://user:password@proxy.internal:3128
 
 presets:
-  # Hide built-in services: github, github-actions, aws, vercel, apple, npm, reference.
+  # Hide built-in services by id. Network: latency, connectivity, udp, reference.
+  # DNS: dns-plain, dns-encrypted. Platforms: apple, microsoft, google, cloudflare.
+  # Developer: github, github-actions, registries, code-hosting, apple-notary, npm.
+  # Cloud: aws, vercel. Tailscale: tailscale, tailscale-derp.
+  # Social & tools: social, collaboration. Regional: china.
   exclude: []
 
 # Add services, or targets to a built-in service by reusing its id.
+# Besides http(s), a target URL can use these schemes. Socket probes only run on a direct egress.
+#   icmp://1.1.1.1                                   ping (set `samples` for more echoes)
+#   tcp://host:443                                   TCP connect
+#   dns://8.8.8.8?name=example.com&type=A            one query over UDP
+#   dot://1.1.1.1?name=example.com&sni=cloudflare-dns.com   DNS over TLS
+#   stun://stun.l.google.com:19302                   STUN binding, reports the public UDP address
+#   quic://dns.adguard-dns.com:853                   QUIC version negotiation (UDP reachability)
 services: []
 #  - id: aws
 #    targets:
@@ -73,8 +84,18 @@ services: []
 #
 #  - id: internal
 #    name: Internal services
-#    description: Anything reachable over HTTP(S).
+#    category: Internal # tab the service appears under
+#    description: Anything reachable over HTTP(S) or the schemes above.
 #    targets:
+#      - id: gateway
+#        name: Office gateway
+#        url: icmp://10.0.0.1
+#        samples: 20
+#      - id: wiki-site
+#        name: Wiki (any 2xx/3xx)
+#        url: https://wiki.internal/
+#        method: HEAD
+#        expectStatus: ['2xx', '3xx']
 #      - id: registry
 #        name: Package mirror
 #        url: https://mirror.internal/healthz

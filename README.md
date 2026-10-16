@@ -1,8 +1,8 @@
 # Netprobe
 
-A self-hosted network diagnostics web app. Open it in a browser, pick services, and press
-**Run test**: the server you deployed it on measures reachability, phase latency, and throughput
-to GitHub, GitHub Actions, AWS, Vercel, Apple notarization, npm, and any HTTP(S) endpoint you add.
+A self-hosted network diagnostics web app. Open it in a browser, pick a category or a service,
+and press **Run**: the server you deployed it on measures reachability, latency, jitter, loss, and
+throughput to about 150 built-in targets and any endpoint you add.
 
 The browser only drives and displays. Every request is made by the server, so results describe
 the network path of the machine Netprobe runs on — typically a CI runner or build host.
@@ -18,6 +18,38 @@ the network path of the machine Netprobe runs on — typically a CI runner or bu
   over several range-split connections, reported in Mbps and MB/s with the bytes received.
 - **Does the exit matter?** Named HTTP/SOCKS proxies can be configured as egress options, and
   every run records the public IP it left from.
+- **What is this machine's network setup?** The Host page shows the device, OS, interfaces,
+  default routes, DNS servers, proxy settings, and flags tunnels and fake-IP DNS.
+
+### Built-in targets
+
+| Category       | Services                                                                                   |
+| -------------- | ------------------------------------------------------------------------------------------ |
+| Network        | ICMP/TCP latency baseline, captive-portal checks, STUN and QUIC (UDP), a download baseline |
+| DNS            | Plain DNS over UDP to public resolvers; DoT, DoH, DoH3, and DoQ                            |
+| Platforms      | Apple, Microsoft, Google, Cloudflare                                                       |
+| Developer      | GitHub, GitHub Actions, package registries, code hosting and AI APIs, notarization, npm    |
+| Cloud          | AWS, Vercel                                                                                |
+| Tailscale      | Control plane and DERP relays (HTTPS and STUN) in nine regions                             |
+| Social & tools | Social and messaging sites; collaboration tools                                            |
+| Regional       | Mainland China sites and mirrors                                                           |
+
+Each service can be run on its own from its group header, or a whole category from the toolbar.
+
+### Probe types
+
+| Scheme    | Measures                                                                                             |
+| --------- | ---------------------------------------------------------------------------------------------------- |
+| `http(s)` | Through curl: DNS, TCP, TLS, time to first byte, total; status checked against the target            |
+| `icmp`    | Echo round trips through the system `ping`; loss and jitter                                          |
+| `tcp`     | Connect time                                                                                         |
+| `dns`     | One query over UDP; the answer is recorded, so hijacked DNS shows up                                 |
+| `dot`     | The same query over TLS, with connect and handshake timed separately                                 |
+| `stun`    | Binding request; records the public address UDP traffic leaves from                                  |
+| `quic`    | Version negotiation: proves a QUIC endpoint (HTTP/3, DoQ) is reachable over UDP, without a handshake |
+
+Socket-level probes cannot go through an HTTP or SOCKS proxy, so they only run on a direct egress.
+Jitter is the mean absolute difference between consecutive round trips.
 
 ### Reading the results
 
@@ -99,7 +131,8 @@ stalls, truncates bodies, and resets mid-transfer (`test/fault-server.ts`).
 
 ## Scope
 
-v0.1 covers quick diagnosis, download throughput, egress selection, live progress, and history.
+v0.1 covers quick diagnosis over HTTP and socket probes, download throughput, egress selection,
+live progress, history, and the Host page.
 Upload tests, scheduled background probing, stability runs, run-to-run comparison, and CSV
 export are planned. Apple notarization is covered at the network-path level; submitting,
 waiting for a verdict, and stapling need a macOS probe and are out of scope.

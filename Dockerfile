@@ -9,9 +9,10 @@ COPY . .
 RUN pnpm build && pnpm prune --prod --ignore-scripts
 
 FROM node:24-bookworm-slim
-# curl is the probe engine; ca-certificates gives it the same trust store as other clients.
+# curl runs HTTP probes, iputils-ping runs ICMP probes, ca-certificates gives both the same
+# trust store as other clients.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends curl ca-certificates \
+  && apt-get install -y --no-install-recommends curl ca-certificates iputils-ping \
   && rm -rf /var/lib/apt/lists/* \
   && mkdir -p /data /config \
   && chown node:node /data
