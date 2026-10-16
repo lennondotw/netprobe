@@ -10,6 +10,7 @@ import { MetaList, PageHeader, Toolbar } from '../components/ui/page-header.tsx'
 import { ListSkeleton } from '../components/ui/skeleton.tsx'
 import { cancelRun, queryKeys, startRun, useConfig, useLatest } from '../lib/api.ts'
 import { formatBytes, formatRelative } from '../lib/format.ts'
+import { containerCaveat } from '../lib/runtime.ts'
 import { useRunStream } from '../lib/use-run-stream.ts'
 
 const modes = [
@@ -318,11 +319,9 @@ const Connectivity = ({
         )}
       </div>
 
-      {config.runtime.environment === 'container' && (
+      {containerCaveat(config.runtime) && (
         <Callout title='Measured from inside a container' tone='warning'>
-          Docker on macOS and Windows routes traffic through an extra VM and NAT layer, and
-          host-level proxies or TUN interfaces may not apply. Compare with a run on the host before
-          drawing conclusions about CI jobs.
+          {containerCaveat(config.runtime)}
         </Callout>
       )}
       {start.error && (

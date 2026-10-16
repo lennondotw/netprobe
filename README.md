@@ -1,11 +1,14 @@
 # Netprobe
 
+[![CI](https://github.com/lennondotw/netprobe/actions/workflows/ci.yml/badge.svg)](https://github.com/lennondotw/netprobe/actions/workflows/ci.yml)
+
 A self-hosted network diagnostics web app. Open it in a browser, pick a category or a service,
 and press **Run**: the server you deployed it on measures reachability, latency, jitter, loss, and
 throughput to about 150 built-in targets and any endpoint you add.
 
 The browser only drives and displays. Every request is made by the server, so results describe
-the network path of the machine Netprobe runs on — typically a CI runner or build host.
+the network path of the machine Netprobe runs on: a CI runner, a build host, a home server, or
+an office gateway.
 
 ## What it answers
 
@@ -75,27 +78,62 @@ proxy, while TLS and time-to-first-byte still include the real path.
 
 ## Running it
 
-### Docker Compose
+Netprobe is a single Node.js process that shells out to `curl` and `ping`. It runs on Linux and
+macOS, natively or in Docker. Pick the setup that matches what you want to measure.
+
+### Docker on Linux with host networking (recommended)
+
+The container shares the host's network stack, so probes, the Egress page, and the Host page
+describe the host itself, with no Docker NAT in between.
 
 ```bash
+git clone https://github.com/lennondotw/netprobe && cd netprobe
 cp config/netprobe.example.yaml config/netprobe.yaml   # optional
-docker compose up -d --build
+NETPROBE_PORT=8080 docker compose -f compose.host.yaml up -d --build
 ```
 
-Open `http://<host>:8080`. History is stored in the `netprobe-data` volume and survives restarts.
+Open `http://<host>:8080`. History lives in the `netprobe-data` volume and survives rebuilds.
 
-### Directly on the host
+### Docker with bridge networking
 
-Requires Node.js 24+ and `curl`.
+Portable, and the only option with Docker Desktop. Traffic leaves through Docker's NAT, which
+the UI points out.
 
 ```bash
-pnpm install
+docker compose up -d --build    # publishes NETPROBE_PUBLISH_PORT (default 8080)
+```
+
+### Prebuilt image
+
+CI publishes multi-arch images (`linux/amd64`, `linux/arm64`) to the GitHub Container Registry:
+
+```bash
+docker run -d --name netprobe --network host --restart unless-stopped \
+  -e NETPROBE_DOCKER_NETWORK=host -e NETPROBE_PORT=8080 \
+  -v netprobe-data:/data -v "$PWD/config:/config:ro" -v /etc/os-release:/host/os-release:ro \
+  ghcr.io/lennondotw/netprobe:latest
+```
+
+### Natively
+
+Requires Node.js 24+, `curl`, and `ping`.
+
+```bash
+pnpm install --frozen-lockfile
 pnpm build
 pnpm start
 ```
 
-Running on the host matters when the host routes traffic differently from containers — see
-[containers vs. host](docs/deploy.md#containers-vs-host).
+[`deploy/netprobe.service`](deploy/netprobe.service) is a systemd unit for running it as a
+service. On macOS, running natively is the way to measure exactly what the host sees: Docker
+Desktop and OrbStack run containers in a VM with its own NAT.
+
+### Behind a reverse proxy
+
+Live progress uses server-sent events. Netprobe sends `X-Accel-Buffering: no`, so nginx (and
+Nginx Proxy Manager) stream them without extra configuration; other proxies must not buffer
+`text/event-stream` responses. See [docs/deploy.md](docs/deploy.md) for an Nginx Proxy Manager
+setup, `.local` names, and a deployment checklist.
 
 ## Configuration
 
@@ -151,14 +189,15 @@ with its path and a suggestion where one is close.
 Targets come only from this file. The web UI cannot add or edit URLs, so anyone who can open
 the page can trigger measurements but cannot make the server request arbitrary addresses.
 
-| Variable               | Default                | Purpose                                   |
-| ---------------------- | ---------------------- | ----------------------------------------- |
-| `NETPROBE_PORT`        | `8080`                 | Listen port                               |
-| `NETPROBE_HOST`        | `0.0.0.0`              | Listen address                            |
-| `NETPROBE_CONFIG`      | `config/netprobe.yaml` | Config file path                          |
-| `NETPROBE_DATA`        | `data/netprobe.db`     | SQLite database path                      |
-| `NETPROBE_HOST_LABEL`  | hostname               | Name shown in the UI and stored with runs |
-| `NETPROBE_ENVIRONMENT` | auto-detected          | Force `container` or `host`               |
+| Variable                  | Default                | Purpose                                      |
+| ------------------------- | ---------------------- | -------------------------------------------- |
+| `NETPROBE_PORT`           | `8080`                 | Listen port                                  |
+| `NETPROBE_HOST`           | `0.0.0.0`              | Listen address                               |
+| `NETPROBE_CONFIG`         | `config/netprobe.yaml` | Config file path                             |
+| `NETPROBE_DATA`           | `data/netprobe.db`     | SQLite database path                         |
+| `NETPROBE_HOST_LABEL`     | hostname               | Name shown in the UI and stored with runs    |
+| `NETPROBE_ENVIRONMENT`    | auto-detected          | Force `container` or `host`                  |
+| `NETPROBE_DOCKER_NETWORK` | unset                  | `host` or `bridge`; set by the Compose files |
 
 ## Safety
 

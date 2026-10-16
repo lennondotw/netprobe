@@ -25,6 +25,8 @@ const setup = () => {
   const runner = new Runner(config, store, {
     hostLabel: 'test',
     environment: 'host',
+    dockerNetwork: null,
+    vm: false,
     platform: 'test',
     curlVersion: 'test',
   })

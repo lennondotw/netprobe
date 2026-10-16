@@ -146,6 +146,13 @@ export interface RuntimeInfo {
   hostLabel: string
   /** `container` when the server detects it runs in Docker; results may differ from the host. */
   environment: 'container' | 'host'
+  /**
+   * Docker network mode, as declared by the deployment (NETPROBE_DOCKER_NETWORK). With `host`, the
+   * container uses the host's network stack, so network measurements match the host's.
+   */
+  dockerNetwork: 'host' | 'bridge' | null
+  /** Running inside a Linux VM (Docker Desktop, OrbStack, WSL): traffic crosses another NAT. */
+  vm: boolean
   platform: string
   curlVersion: string
 }

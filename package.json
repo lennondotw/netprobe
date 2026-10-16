@@ -2,8 +2,13 @@
   "name": "netprobe",
   "version": "0.1.0",
   "private": true,
-  "description": "Self-hosted network diagnostics: probe reachability, latency, and throughput from the machine that runs it.",
+  "description": "Self-hosted network diagnostics: reachability, latency, jitter, throughput, and egress identity, measured from the machine it runs on.",
+  "homepage": "https://github.com/lennondotw/netprobe",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lennondotw/netprobe.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "node scripts/dev.ts",

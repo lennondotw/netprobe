@@ -51,7 +51,12 @@ const osName = async () => {
     const build = /BuildVersion:\s*(.+)/.exec(out ?? '')?.[1]?.trim()
     if (name && ver) return `${name} ${ver}${build ? ` (${build})` : ''}`
   }
-  const pretty = /^PRETTY_NAME="?([^"\n]+)"?/m.exec(read('/etc/os-release') ?? '')?.[1]
+  // In a container, the host's os-release can be mounted at /host/os-release (see compose.host.yaml);
+  // otherwise /etc/os-release describes the container image.
+  const hostRelease = read('/host/os-release')
+  const prettyName = (text: string | null) => /^PRETTY_NAME="?([^"\n]+)"?/m.exec(text ?? '')?.[1]
+  const pretty = prettyName(hostRelease) ?? prettyName(read('/etc/os-release'))
+  if (pretty && !hostRelease && existsSync('/.dockerenv')) return `${pretty} (container image)`
   return pretty ?? `${platform()} ${release()}`
 }
 

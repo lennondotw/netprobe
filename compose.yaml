@@ -1,3 +1,7 @@
+# Bridge networking: portable, works with Docker Desktop. Traffic leaves through Docker's NAT, so
+# on Linux prefer compose.host.yaml when you want measurements identical to the host's.
+#
+#   docker compose up -d --build
 services:
   netprobe:
     build: .
@@ -7,6 +11,7 @@ services:
     ports:
       - '${NETPROBE_PUBLISH_PORT:-8080}:8080'
     environment:
+      NETPROBE_DOCKER_NETWORK: bridge
       # Shown in the UI and stored with every run; defaults to the container hostname.
       NETPROBE_HOST_LABEL: ${NETPROBE_HOST_LABEL:-}
     volumes:

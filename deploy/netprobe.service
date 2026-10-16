@@ -1,0 +1,35 @@
+# Run Netprobe directly on a Linux host with systemd.
+#
+#   sudo useradd --system --home /opt/netprobe --shell /usr/sbin/nologin netprobe
+#   sudo git clone https://github.com/lennondotw/netprobe /opt/netprobe
+#   cd /opt/netprobe && sudo pnpm install --frozen-lockfile && sudo pnpm build
+#   sudo install -d -o netprobe /var/lib/netprobe
+#   sudo cp deploy/netprobe.service /etc/systemd/system/ && sudo systemctl enable --now netprobe
+#
+# Requires Node.js 24+, curl, and ping (iputils-ping).
+[Unit]
+Description=Netprobe network diagnostics
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=netprobe
+WorkingDirectory=/opt/netprobe
+Environment=NODE_ENV=production
+Environment=NETPROBE_PORT=8080
+Environment=NETPROBE_CONFIG=/opt/netprobe/config/netprobe.yaml
+Environment=NETPROBE_DATA=/var/lib/netprobe/netprobe.db
+ExecStart=/usr/bin/env node --disable-warning=ExperimentalWarning src/server/main.ts
+Restart=on-failure
+# Stop cancels the active run and kills its curl processes.
+KillSignal=SIGTERM
+TimeoutStopSec=10
+# ping relies on its file capability, which NoNewPrivileges would block.
+NoNewPrivileges=false
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

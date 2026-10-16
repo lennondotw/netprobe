@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 
 import { useConfig } from '../lib/api.ts'
 import { Link, usePathname } from '../lib/router.tsx'
+import { measuredFrom, measuresHostNetwork } from '../lib/runtime.ts'
 import { StatusDot } from './ui/badge.tsx'
 
 const navItems = [
@@ -58,10 +59,8 @@ const RuntimeFooter = () => {
         {runtime.hostLabel}
       </p>
       <p className='flex items-center gap-1.5'>
-        <StatusDot tone={runtime.environment === 'container' ? 'warning' : 'success'} />
-        {runtime.environment === 'container'
-          ? 'Measuring from a container'
-          : 'Measuring from the host'}
+        <StatusDot tone={measuresHostNetwork(runtime) ? 'success' : 'warning'} />
+        {measuredFrom(runtime)}
       </p>
       <p className='truncate font-mono text-[10.5px] text-faint' title={runtime.curlVersion}>
         {runtime.curlVersion.split(' ').slice(0, 2).join(' ')}

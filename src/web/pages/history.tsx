@@ -8,6 +8,7 @@ import { ListSkeleton } from '../components/ui/skeleton.tsx'
 import { useRuns } from '../lib/api.ts'
 import { formatDateTime, formatDuration, formatRelative } from '../lib/format.ts'
 import { navigate } from '../lib/router.tsx'
+import { measuredFrom } from '../lib/runtime.ts'
 
 export const runStatus: Record<RunStatus, { label: string; tone: Tone }> = {
   queued: { label: 'Queued', tone: 'neutral' },
@@ -137,7 +138,9 @@ export const HistoryPage = () => {
               header: 'Measured from',
               className: 'text-muted',
               cell: (run) =>
-                `${run.runtime.hostLabel}${run.runtime.environment === 'container' ? ' (container)' : ''}`,
+                run.runtime.environment === 'host'
+                  ? run.runtime.hostLabel
+                  : `${run.runtime.hostLabel} (${measuredFrom(run.runtime).toLowerCase()})`,
             },
             {
               id: 'totals',

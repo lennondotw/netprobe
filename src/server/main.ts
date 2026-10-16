@@ -29,9 +29,17 @@ const detectEnvironment = (): RuntimeInfo['environment'] => {
   return existsSync('/.dockerenv') || existsSync('/run/.containerenv') ? 'container' : 'host'
 }
 
+const dockerNetwork = (): RuntimeInfo['dockerNetwork'] =>
+  env.NETPROBE_DOCKER_NETWORK === 'host' || env.NETPROBE_DOCKER_NETWORK === 'bridge'
+    ? env.NETPROBE_DOCKER_NETWORK
+    : null
+
 const runtime: RuntimeInfo = {
   hostLabel: env.NETPROBE_HOST_LABEL || config.hostLabel || hostname(),
   environment: detectEnvironment(),
+  dockerNetwork: dockerNetwork(),
+  // Docker Desktop, OrbStack, and WSL 2 run containers in a Linux VM with their own NAT.
+  vm: /linuxkit|orbstack|microsoft|wsl/i.test(release()),
   platform: `${platform()} ${release()}`,
   curlVersion: await curlVersion(),
 }

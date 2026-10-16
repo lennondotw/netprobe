@@ -1,58 +1,64 @@
 # Deploying
 
-## On a LAN host with Docker
+## Linux host with Docker
 
 ```bash
-git clone <this repository> netprobe && cd netprobe
+git clone https://github.com/lennondotw/netprobe && cd netprobe
 cp config/netprobe.example.yaml config/netprobe.yaml   # edit as needed
-NETPROBE_HOST_LABEL="$(hostname -s)" docker compose up -d --build
+NETPROBE_PORT=8080 NETPROBE_HOST_LABEL="$(hostname -s)" \
+  docker compose -f compose.host.yaml up -d --build
 ```
 
-The container publishes port 8080 on the host (`NETPROBE_PUBLISH_PORT` changes it). On macOS,
-Bonjour already advertises the host as `<LocalHostName>.local`, so other machines on the LAN can
-open `http://<LocalHostName>.local:8080` with no extra setup. Find the name with:
+`compose.host.yaml` uses host networking: measurements and the Host page describe the host,
+and the port is whatever `NETPROBE_PORT` says. Pick a free one if 8080 is taken. To listen on one
+interface only (say, behind a reverse proxy on the same machine), set `NETPROBE_HOST=127.0.0.1`.
 
-```bash
-scutil --get LocalHostName
-```
-
-On Linux the same works once `avahi-daemon` is running. A dedicated name such as
-`netprobe.local` needs an extra mDNS record published by the host (for example
-`dns-sd -P netprobe _http._tcp local 8080 netprobe.local <host-ip>` on macOS); it is not
-required.
+`compose.yaml` is the bridge-network alternative. It publishes `NETPROBE_PUBLISH_PORT` and
+works everywhere, at the cost of measuring through Docker's NAT.
 
 ## Updating
 
 ```bash
 git pull
-docker compose up -d --build
+docker compose -f compose.host.yaml up -d --build
 ```
 
-History is in the `netprobe-data` volume and survives rebuilds. To start fresh:
-`docker compose down -v`.
+History is in the `netprobe-data` volume and survives rebuilds. To start fresh, remove the volume
+with `docker compose -f compose.host.yaml down -v`.
+
+## Nginx Proxy Manager
+
+1. Run Netprobe on the host network, as above.
+2. In Nginx Proxy Manager, add a **Proxy Host**:
+   - Domain: the name you want, e.g. `netprobe.example.lan` (it must resolve to the proxy).
+   - Scheme `http`, forward hostname: the Docker host's LAN address (or `127.0.0.1` when the
+     proxy itself uses host networking), forward port: `NETPROBE_PORT`.
+   - Websockets support is not needed. Live progress uses server-sent events, and Netprobe sends
+     `X-Accel-Buffering: no`, so nginx does not buffer them.
+3. Optionally add a TLS certificate and an access list. Netprobe has no authentication of its own.
+
+## `.local` names
+
+On macOS, Bonjour already advertises the machine as `<LocalHostName>.local` (`scutil --get
+LocalHostName`), so `http://<LocalHostName>.local:8080` works across the LAN. On Linux the same
+works once `avahi-daemon` is running.
 
 ## Containers vs. host
 
-Docker Desktop, OrbStack, and Colima on macOS run containers inside a Linux VM. Container
-traffic crosses that VM's NAT, and proxies or TUN interfaces configured on macOS may or may not
-see it. CI jobs on the same machine usually run on the host, so a container measurement can
-disagree with what the jobs experience.
+Docker Desktop, OrbStack, and Colima on macOS (and WSL 2 on Windows) run containers inside a Linux
+VM. Container traffic crosses that VM's NAT, and proxies or TUN interfaces configured on the host
+may not see it. Netprobe detects the VM and says so in the UI. On those platforms run Netprobe
+natively when the host's own path is what matters.
 
-Every run records where it was measured from, and the UI warns when the server runs in a
-container. When validating a deployment:
-
-1. Run a quick test from the container.
-2. Run the same test on the host: `pnpm install && pnpm build && NETPROBE_PORT=8081 pnpm start`.
-3. Compare the egress IP and remote IPs in both runs. If they differ, the container is not on the
-   same path as the host, and host-mode results are the ones that describe CI.
+On Linux, host networking removes the difference. With bridge networking the UI notes the extra
+NAT.
 
 ## Acceptance checklist
 
-- [ ] Another device on the LAN opens `http://<host>.local:8080` and starts a run.
-- [ ] A quick run completes; history shows it after `docker compose restart`.
+- [ ] Another device on the LAN opens the page and starts a run.
+- [ ] Two viewers starting runs at once: the second waits, then runs.
+- [ ] History survives `docker compose restart`.
 - [ ] Cancelling a running download stops it, and no `curl` processes remain
       (`docker compose exec netprobe pgrep curl` prints nothing).
-- [ ] `docker compose logs` contains no proxy credentials or signed URLs.
-- [ ] Egress IP and remote IPs from the container match a host-mode run, or the difference is
-      understood.
-- [ ] Existing proxy and CI configuration on the host is untouched.
+- [ ] Logs (`docker compose logs`) contain no proxy credentials or signed URLs.
+- [ ] The sidebar says "Container, host network" (or "Host"), not a VM or bridge network.

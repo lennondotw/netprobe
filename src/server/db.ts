@@ -22,6 +22,15 @@ const normalizeResult = (raw: string): TargetResult => {
   return result
 }
 
+/** Runs stored by older versions lack runtime fields added since. */
+const normalizeRun = (raw: string): RunRecord => {
+  const run = JSON.parse(raw) as RunRecord
+  run.queueAhead ??= null
+  run.runtime.dockerNetwork ??= null
+  run.runtime.vm ??= false
+  return run
+}
+
 /**
  * Run history in SQLite. Rows hold JSON documents; the columns only exist for ordering and
  * lookups, so the shapes in `shared/types.ts` stay the single source of truth.
@@ -73,7 +82,7 @@ export class Store {
     return this.#db
       .prepare('SELECT record FROM runs ORDER BY created_at DESC LIMIT ?')
       .all(limit)
-      .map((row) => JSON.parse(String(row.record)) as RunRecord)
+      .map((row) => normalizeRun(String(row.record)))
   }
 
   getRun(id: string): RunDetail | null {
@@ -83,7 +92,7 @@ export class Store {
       .prepare('SELECT result FROM results WHERE run_id = ?')
       .all(id)
       .map((r) => normalizeResult(String(r.result)))
-    return { ...(JSON.parse(String(row.record)) as RunRecord), results }
+    return { ...normalizeRun(String(row.record)), results }
   }
 
   /** The most recent finished result for every target, across all runs. */
@@ -102,7 +111,7 @@ export class Store {
       )
       .all()
       .map((row) => {
-        const run = JSON.parse(String(row.record)) as RunRecord
+        const run = normalizeRun(String(row.record))
         return {
           runId: run.id,
           createdAt: run.createdAt,

@@ -14,6 +14,7 @@ import { ListSkeleton } from '../components/ui/skeleton.tsx'
 import { InfoHint } from '../components/ui/tooltip.tsx'
 import { ApiError } from '../lib/api.ts'
 import { formatBytes, formatRelative, isFakeIp } from '../lib/format.ts'
+import { measuredFrom, measuresHostNetwork } from '../lib/runtime.ts'
 
 const fetchHost = async (): Promise<HostInfo> => {
   const response = await fetch('/api/host')
@@ -147,15 +148,16 @@ export const HostPage = () => {
       <Toolbar>
         <MetaList>
           <span>{system.hostname}</span>
-          <span>{runtime.environment === 'container' ? 'Container view' : 'Host view'}</span>
+          <span>{measuredFrom(runtime)}</span>
           <span>Collected {formatRelative(data.collectedAt)}</span>
         </MetaList>
       </Toolbar>
 
-      {runtime.environment === 'container' && (
+      {runtime.environment === 'container' && !measuresHostNetwork(runtime) && (
         <Callout title='This is the container’s view' tone='warning'>
           Interfaces, routes, DNS, and proxy settings below belong to the container, not the machine
-          it runs on. Run Netprobe on the host to see the host’s network configuration.
+          it runs on. Use host networking, or run Netprobe on the host, to see the host’s network
+          configuration.
         </Callout>
       )}
       {tunnelRoutes.length > 0 && (
@@ -275,9 +277,7 @@ export const HostPage = () => {
               weight: 8,
               node: (
                 <Panel title='Runtime'>
-                  <Row label='Measuring from'>
-                    {runtime.environment === 'container' ? 'Container' : 'Host'}
-                  </Row>
+                  <Row label='Measuring from'>{measuredFrom(runtime)}</Row>
                   <Row label='Kernel'>
                     <span className={`${mono} block max-w-80 truncate`} title={system.kernel}>
                       {system.kernel}

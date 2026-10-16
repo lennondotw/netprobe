@@ -9,6 +9,10 @@ COPY . .
 RUN pnpm build && pnpm prune --prod --ignore-scripts
 
 FROM node:24-bookworm-slim
+LABEL org.opencontainers.image.title="Netprobe" \
+  org.opencontainers.image.description="Self-hosted network diagnostics: reachability, latency, jitter, throughput, and egress identity, measured from the machine it runs on." \
+  org.opencontainers.image.source="https://github.com/lennondotw/netprobe" \
+  org.opencontainers.image.licenses="MIT"
 # curl runs HTTP probes, iputils-ping runs ICMP probes, ca-certificates gives both the same
 # trust store as other clients.
 RUN apt-get update \
@@ -18,6 +22,7 @@ RUN apt-get update \
   && chown node:node /data
 WORKDIR /app
 ENV NODE_ENV=production \
+  NETPROBE_HOST=0.0.0.0 \
   NETPROBE_PORT=8080 \
   NETPROBE_CONFIG=/config/netprobe.yaml \
   NETPROBE_DATA=/data/netprobe.db
@@ -29,5 +34,7 @@ COPY --from=build /app/src/shared ./src/shared
 USER node
 VOLUME /data
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=5s CMD curl -fsS http://127.0.0.1:8080/api/health || exit 1
+# Shell form so the check follows NETPROBE_PORT (host networking often needs another port).
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
+  CMD curl -fsS "http://127.0.0.1:${NETPROBE_PORT}/api/health" || exit 1
 CMD ["node", "--disable-warning=ExperimentalWarning", "src/server/main.ts"]
