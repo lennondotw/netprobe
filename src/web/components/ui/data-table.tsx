@@ -8,6 +8,7 @@ import {
 } from 'react'
 
 import { gutter } from './layout.ts'
+import { OverlayScrollbar, useScrollSync } from './overlay-scrollbar.tsx'
 import { TooltipTrigger } from './tooltip.tsx'
 
 export interface DataTableColumn<Row> {
@@ -73,6 +74,7 @@ export const DataTable = <Row,>({
   selectedRowId = null,
 }: DataTableProps<Row>) => {
   const sticky = useStickyHeader()
+  const scroll = useScrollSync(sticky.containerRef)
   const sections: readonly DataTableGroup<Row>[] = groups ?? [
     { id: 'all', header: null, label, rows: rows ?? [] },
   ]
@@ -129,8 +131,9 @@ export const DataTable = <Row,>({
           <thead>{headerCells}</thead>
         </table>
       </div>
+      {/* Native scrollbar hidden: each section gets an overlay scrollbar instead. */}
       <div
-        className='@container overflow-x-auto'
+        className='@container overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
         onScroll={sticky.onScroll}
         ref={sticky.containerRef}
       >
@@ -202,6 +205,19 @@ export const DataTable = <Row,>({
                   </tr>
                 )
               })}
+              {scroll.overflowing && (
+                // A zero-height row whose bar overlays the section's bottom edge, pinned to the
+                // visible width. Every section's bar shows the same position.
+                <tr aria-hidden='true'>
+                  <td className='h-0 p-0' colSpan={columns.length}>
+                    <div className='sticky left-0 h-0 w-[100cqw]'>
+                      <div className={`absolute inset-x-0 bottom-0 ${gutter}`}>
+                        <OverlayScrollbar sync={scroll.sync} />
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           ))}
         </table>

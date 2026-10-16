@@ -28,6 +28,9 @@ erasable syntax only (no enums, namespaces, or parameter properties).
 - Hover details go through `ui/tooltip.tsx`: a DataTable column's `tooltip` (grouped per column)
   or `InfoHint` (all hints share one group). Each group has one popup root and its own warm-up
   timer; whole cells or label + icon are the hit targets, and popups ignore the pointer.
+- Tables: headers stick below the page header through a detached header row; wide tables scroll
+  sideways with an overlay scrollbar per section (shared position, separate interaction state).
+  A control whose use changes its neighbours sits in a stable (leading) slot so it never moves.
 - The config format is defined once, in zod (`src/server/config.ts`), with a description on
   every field. After changing it or the presets, run `pnpm schema` to regenerate
   `config/netprobe.schema.json`; a test fails while the two disagree.
