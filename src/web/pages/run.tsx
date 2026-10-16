@@ -15,7 +15,8 @@ import { runStatus } from './history.tsx'
 export const RunPage = ({ id }: { id: string }) => {
   const config = useConfig()
   const stored = useRun(id)
-  const live = useRunStream(stored.data?.status === 'running' ? id : null)
+  const pending = stored.data?.status === 'running' || stored.data?.status === 'queued'
+  const live = useRunStream(pending ? id : null)
   const run = live ?? stored.data
 
   const results = useMemo(() => {
@@ -104,6 +105,14 @@ export const RunPage = ({ id }: { id: string }) => {
           <span>{formatDuration(run.createdAt, run.finishedAt)}</span>
         </MetaList>
       </Toolbar>
+      {run.status === 'queued' && (
+        <Callout title='Waiting for another test to finish' tone='warning'>
+          Tests run one at a time so they do not skew each other.
+          {run.queueAhead && run.queueAhead > 1
+            ? ` ${run.queueAhead} runs are ahead of this one.`
+            : ''}
+        </Callout>
+      )}
       {run.error && (
         <Callout role='alert' title='The run failed' tone='danger'>
           {run.error}

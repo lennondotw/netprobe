@@ -150,7 +150,8 @@ export interface RuntimeInfo {
   curlVersion: string
 }
 
-export type RunStatus = 'running' | 'completed' | 'cancelled' | 'failed'
+/** `queued` runs wait for the run ahead of them; runs never overlap. */
+export type RunStatus = 'queued' | 'running' | 'completed' | 'cancelled' | 'failed'
 
 export interface EgressSnapshot {
   id: string
@@ -175,6 +176,8 @@ export interface RunRecord {
   createdAt: string
   finishedAt: string | null
   status: RunStatus
+  /** While queued: how many runs will finish before this one starts. Null otherwise. */
+  queueAhead: number | null
   params: RunParams
   egress: EgressSnapshot
   runtime: RuntimeInfo
@@ -223,6 +226,8 @@ export interface AppConfig {
   limits: { maxRepeats: number; downloadConnections: number }
   runtime: RuntimeInfo
   activeRunId: string | null
+  /** Runs waiting for the active one, in order. */
+  queuedRunIds: string[]
   /** Optional parts of the app, as enabled in the config file. */
   modules: { downloads: boolean; host: boolean; egress: boolean; browserCheck: boolean }
 }

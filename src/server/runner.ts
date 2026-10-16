@@ -23,21 +23,28 @@ import { redactText } from './redact.ts'
 
 const userAgent = 'netprobe/0.1 (+https://github.com/)'
 
-export class RunConflictError extends Error {}
-
 interface ActiveRun {
   record: RunRecord
   results: Map<string, TargetResult>
   abort: AbortController
   events: EventEmitter<{ event: [RunEvent] }>
+  targets: ResolvedTarget[]
+  egress: ResolvedEgress
 }
 
+export const isFinished = (status: RunRecord['status']) =>
+  status === 'completed' || status === 'cancelled' || status === 'failed'
+
 /**
- * Executes one run at a time. Runs are serialised on purpose: overlapping measurements skew each
- * other, and the host usually has more important traffic (CI jobs) than ours.
+ * Executes one run at a time and queues the rest in arrival order. Runs are serialised on purpose:
+ * overlapping measurements skew each other, and the host usually has more important traffic (CI
+ * jobs) than ours. Anyone can start a run at any time; it simply waits its turn.
  */
 export class Runner {
   #active: ActiveRun | null = null
+  readonly #queue: ActiveRun[] = []
+  /** Every run that is running or queued, by id. */
+  readonly #runs = new Map<string, ActiveRun>()
   readonly #config: ResolvedConfig
   readonly #store: Store
   readonly #runtime: RuntimeInfo
@@ -52,22 +59,25 @@ export class Runner {
     return this.#active?.record.id ?? null
   }
 
-  /** Snapshot of the active run, or null if `id` is not running. */
+  get queuedRunIds() {
+    return this.#queue.map((run) => run.record.id)
+  }
+
+  /** Snapshot of a running or queued run, or null if `id` is neither. */
   activeDetail(id: string): RunDetail | null {
-    if (this.#active?.record.id !== id) return null
-    return { ...this.#active.record, results: [...this.#active.results.values()] }
+    const run = this.#runs.get(id)
+    if (!run) return null
+    return { ...run.record, results: [...run.results.values()] }
   }
 
   subscribe(id: string, listener: (event: RunEvent) => void): (() => void) | null {
-    const active = this.#active
-    if (active?.record.id !== id) return null
-    active.events.on('event', listener)
-    return () => active.events.off('event', listener)
+    const run = this.#runs.get(id)
+    if (!run) return null
+    run.events.on('event', listener)
+    return () => run.events.off('event', listener)
   }
 
   start(params: RunParams): RunRecord {
-    if (this.#active) throw new RunConflictError('Another run is in progress.')
-
     const egress = this.#config.egress.find((e) => e.id === params.egressId)
     if (!egress) throw new Error(`Unknown egress "${params.egressId}".`)
     const targets = params.targetIds.map((id) => {
@@ -82,7 +92,8 @@ export class Runner {
       id: randomUUID(),
       createdAt: new Date().toISOString(),
       finishedAt: null,
-      status: 'running',
+      status: 'queued',
+      queueAhead: null,
       params: { ...params, targetIds: eligible.map((t) => t.id) },
       egress: {
         id: egress.id,
@@ -109,31 +120,76 @@ export class Runner {
         },
       ]),
     )
-    const active: ActiveRun = {
+    const run: ActiveRun = {
       record,
       results,
       abort: new AbortController(),
       events: new EventEmitter(),
+      targets: eligible,
+      egress,
     }
-    this.#active = active
-    this.#store.saveRun(record)
-
-    void this.#execute(active, eligible, egress).finally(() => {
-      this.#active = null
-    })
-    return record
+    this.#runs.set(record.id, run)
+    this.#queue.push(run)
+    this.#publishQueue()
+    if (!this.#active) this.#launchNext()
+    return { ...run.record }
   }
 
   cancel(id: string): boolean {
-    if (this.#active?.record.id !== id) return false
-    this.#active.abort.abort()
+    const run = this.#runs.get(id)
+    if (!run) return false
+    if (run === this.#active) {
+      run.abort.abort()
+      return true
+    }
+    // A queued run never started: drop it from the queue and close it out.
+    this.#queue.splice(this.#queue.indexOf(run), 1)
+    run.record.status = 'cancelled'
+    run.record.queueAhead = null
+    run.record.finishedAt = new Date().toISOString()
+    for (const result of run.results.values()) result.status = 'cancelled'
+    this.#store.saveRun(run.record)
+    this.#runs.delete(id)
+    run.events.emit('event', { type: 'run', run: { ...run.record } })
+    this.#publishQueue()
     return true
   }
 
-  /** Stop the active run and wait briefly for curl processes to exit. */
+  /** Cancel everything and wait briefly for curl processes to exit. */
   async shutdown() {
+    // Iterate over a copy: cancelling removes runs from the queue.
+    for (const run of this.#queue.slice()) this.cancel(run.record.id)
     this.#active?.abort.abort()
     for (let i = 0; i < 50 && this.#active; i++) await sleep(20)
+  }
+
+  /** Tell every queued run how many runs are ahead of it. */
+  #publishQueue() {
+    const offset = this.#active ? 1 : 0
+    this.#queue.forEach((run, index) => {
+      const ahead = index + offset
+      if (run.record.queueAhead === ahead && run.record.status === 'queued') return
+      run.record.queueAhead = ahead
+      this.#store.saveRun(run.record)
+      run.events.emit('event', { type: 'run', run: { ...run.record } })
+    })
+  }
+
+  #launchNext() {
+    const run = this.#queue.shift()
+    if (!run) return
+    this.#active = run
+    run.record.status = 'running'
+    run.record.queueAhead = null
+    this.#store.saveRun(run.record)
+    run.events.emit('event', { type: 'run', run: { ...run.record } })
+    this.#publishQueue()
+    void this.#execute(run, run.targets, run.egress).finally(() => {
+      this.#runs.delete(run.record.id)
+      this.#active = null
+      this.#launchNext()
+      this.#publishQueue()
+    })
   }
 
   async #execute(active: ActiveRun, targets: ResolvedTarget[], egress: ResolvedEgress) {

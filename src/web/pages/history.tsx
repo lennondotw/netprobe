@@ -10,6 +10,7 @@ import { formatDateTime, formatDuration, formatRelative } from '../lib/format.ts
 import { navigate } from '../lib/router.tsx'
 
 export const runStatus: Record<RunStatus, { label: string; tone: Tone }> = {
+  queued: { label: 'Queued', tone: 'neutral' },
   running: { label: 'Running', tone: 'info' },
   completed: { label: 'Completed', tone: 'success' },
   cancelled: { label: 'Cancelled', tone: 'neutral' },

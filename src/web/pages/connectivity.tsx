@@ -50,6 +50,31 @@ export const ConnectivityPage = () => {
 
 const allCategories = 'All'
 
+const ownRunKey = 'netprobe.ownRunId'
+
+/**
+ * The id of the run this tab started, kept for the session so a reload still knows which queued
+ * or running run is its own. Storage can be unavailable (private mode); then it lives in memory.
+ */
+const useOwnRunId = () => {
+  const [id, setId] = useState<string | null>(() => {
+    try {
+      return sessionStorage.getItem(ownRunKey)
+    } catch {
+      return null
+    }
+  })
+  const update = (next: string) => {
+    setId(next)
+    try {
+      sessionStorage.setItem(ownRunKey, next)
+    } catch {
+      // Not persisted; the in-memory value still works for this page.
+    }
+  }
+  return [id, update] as const
+}
+
 /** Mirrors the server: socket probes cannot go through a proxy, downloads only run in download mode. */
 const isEligible = (target: TargetInfo, mode: RunMode, viaProxy: boolean) => {
   if (mode === 'download') return target.download !== null
@@ -71,22 +96,28 @@ const Connectivity = ({
   const [repeats, setRepeats] = useState(String(config.defaults.repeats))
   // Store what the user turned off, so services added to the config later start selected.
   const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set())
-  const [startedRunId, setStartedRunId] = useState<string | null>(null)
+  const [ownRunId, setOwnRunId] = useOwnRunId()
   const [category, setCategory] = useState(allCategories)
 
-  const followedRunId = startedRunId ?? config.activeRunId
-  const live = useRunStream(followedRunId)
-  const running = live
-    ? live.status === 'running'
-    : followedRunId !== null && config.activeRunId === followedRunId
+  // The run this page started, and whatever run is executing for someone else. Runs never
+  // overlap: a new run waits in the server's queue until the one ahead of it finishes.
+  const own = useRunStream(ownRunId)
+  const otherRunId =
+    config.activeRunId && config.activeRunId !== ownRunId ? config.activeRunId : null
+  const other = useRunStream(otherRunId)
+  const ownBusy = own
+    ? own.status === 'running' || own.status === 'queued'
+    : ownRunId !== null &&
+      (config.activeRunId === ownRunId || config.queuedRunIds.includes(ownRunId))
+  const running = ownBusy
 
-  // While a run is live the page shows that run, whatever the selector last held (e.g. after a reload).
-  const mode = running && live ? live.params.mode : chosenMode
+  // While this page's run is live it shows that run's mode, whatever the selector last held.
+  const mode = ownBusy && own ? own.params.mode : chosenMode
 
   const start = useMutation({
     mutationFn: startRun,
     onSuccess: (run) => {
-      setStartedRunId(run.id)
+      setOwnRunId(run.id)
       void queryClient.invalidateQueries({ queryKey: queryKeys.config })
     },
   })
@@ -131,25 +162,32 @@ const Connectivity = ({
     const map = new Map<string, ResultEntry>()
     for (const item of latest)
       map.set(item.result.targetId, { result: item.result, at: item.createdAt })
-    if (live) {
-      for (const result of live.results) {
+    // Someone else's live run, then this page's own run on top.
+    for (const run of [other, own]) {
+      if (!run || run.status === 'queued') continue
+      for (const result of run.results) {
         map.set(result.targetId, {
           result,
-          at: live.status === 'running' ? undefined : live.createdAt,
+          at: run.status === 'running' ? undefined : run.createdAt,
         })
       }
     }
     return map
-  }, [latest, live])
+  }, [latest, other, own])
 
   const lastRunAt = latest.reduce<string | null>(
     (max, item) => (!max || item.createdAt > max ? item.createdAt : max),
     null,
   )
-  const progress =
-    live && live.status === 'running'
-      ? { done: live.results.filter((r) => r.status === 'done').length, total: live.results.length }
-      : null
+  const runningRun = own?.status === 'running' ? own : other?.status === 'running' ? other : null
+  const progress = runningRun
+    ? {
+        done: runningRun.results.filter((r) => r.status === 'done').length,
+        total: runningRun.results.length,
+        own: runningRun === own,
+      }
+    : null
+  const live = own ?? other
 
   const estimate = selectedTargets.reduce(
     (acc, t) => {
@@ -206,11 +244,11 @@ const Connectivity = ({
                 value={repeats}
               />
             )}
-            {running && followedRunId ? (
+            {ownBusy && ownRunId ? (
               <button
                 className={buttonClass.secondary}
                 disabled={cancel.isPending}
-                onClick={() => cancel.mutate(followedRunId)}
+                onClick={() => cancel.mutate(ownRunId)}
                 type='button'
               >
                 Cancel
@@ -255,9 +293,15 @@ const Connectivity = ({
                 Egress IP <span className='font-mono text-secondary'>{live.egress.publicIp}</span>
               </span>
             )}
-            {progress ? (
+            {own?.status === 'queued' ? (
               <span className='text-accent-text'>
-                Running {progress.done}/{progress.total}
+                Waiting for another test to finish
+                {own.queueAhead && own.queueAhead > 1 ? ` · ${own.queueAhead} ahead` : ''}
+              </span>
+            ) : progress ? (
+              <span className='text-accent-text'>
+                {progress.own ? 'Running' : 'Another test is running'} {progress.done}/
+                {progress.total}
               </span>
             ) : (
               lastRunAt && <span>Last measured {formatRelative(lastRunAt)}</span>
@@ -286,9 +330,9 @@ const Connectivity = ({
           {start.error.message}
         </Callout>
       )}
-      {live?.status === 'failed' && live.error && (
+      {own?.status === 'failed' && own.error && (
         <Callout role='alert' title='The run failed' tone='danger'>
-          {live.error}
+          {own.error}
         </Callout>
       )}
       {live?.egress.publicIpError && (

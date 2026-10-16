@@ -211,7 +211,8 @@ export const DataTable = <Row,>({
                 <tr aria-hidden='true'>
                   <td className='h-0 p-0' colSpan={columns.length}>
                     <div className='sticky left-0 h-0 w-[100cqw]'>
-                      <div className={`absolute inset-x-0 bottom-0 ${gutter}`}>
+                      {/* Inset 4px from the sides and 4px above the section's bottom edge. */}
+                      <div className='absolute inset-x-1 bottom-1'>
                         <OverlayScrollbar sync={scroll.sync} />
                       </div>
                     </div>

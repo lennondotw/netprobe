@@ -29,7 +29,7 @@ export const useRunStream = (runId: string | null) => {
           ),
         }
       })
-      if (event.type === 'run' && event.run.status !== 'running') {
+      if (event.type === 'run' && ['completed', 'cancelled', 'failed'].includes(event.run.status)) {
         source.close()
         void queryClient.invalidateQueries({ queryKey: queryKeys.latest })
         void queryClient.invalidateQueries({ queryKey: queryKeys.runs })

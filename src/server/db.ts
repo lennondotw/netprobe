@@ -112,15 +112,19 @@ export class Store {
       })
   }
 
-  /** Runs left `running` by a previous process can never finish; mark them failed on startup. */
+  /** Runs left running or queued by a previous process can never finish; mark them on startup. */
   failInterruptedRuns() {
     for (const run of this.listRuns(1000)) {
-      if (run.status !== 'running') continue
+      if (run.status !== 'running' && run.status !== 'queued') continue
+      const started = run.status === 'running'
       this.saveRun({
         ...run,
-        status: 'failed',
+        status: started ? 'failed' : 'cancelled',
+        queueAhead: null,
         finishedAt: run.finishedAt ?? new Date().toISOString(),
-        error: 'The server stopped while this run was in progress.',
+        error: started
+          ? 'The server stopped while this run was in progress.'
+          : 'The server stopped before this run started.',
       })
     }
   }

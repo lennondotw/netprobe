@@ -9,7 +9,7 @@ import { publicTarget, type ResolvedConfig } from './config.ts'
 import type { Store } from './db.ts'
 import { collectHostInfo } from './host.ts'
 import { collectIdentity } from './identity.ts'
-import { RunConflictError, type Runner } from './runner.ts'
+import { isFinished, type Runner } from './runner.ts'
 
 const startRunSchema = z.object({
   mode: z.enum(['quick', 'download']),
@@ -61,6 +61,7 @@ export const buildApp = async ({ config, store, runner, runtime, webRoot, logger
     limits: { maxRepeats: 20, downloadConnections: config.download.connections },
     runtime,
     activeRunId: runner.activeRunId,
+    queuedRunIds: runner.queuedRunIds,
     modules: {
       downloads: config.modules.downloads,
       host: config.modules.host,
@@ -78,6 +79,8 @@ export const buildApp = async ({ config, store, runner, runtime, webRoot, logger
 
   // Identity checks call many third-party services, so results are kept per egress until re-run.
   const identities = new Map<string, IdentityReport>()
+  // Checks already running, so concurrent viewers share one round of third-party requests.
+  const inflight = new Map<string, Promise<IdentityReport>>()
 
   app.get('/api/identity', async (request, reply) => {
     if (!config.modules.egress)
@@ -93,9 +96,17 @@ export const buildApp = async ({ config, store, runner, runtime, webRoot, logger
     if (!parsed.success) return reply.code(400).send({ error: z.prettifyError(parsed.error) })
     const egress = config.egress.find((e) => e.id === parsed.data.egressId)
     if (!egress) return reply.code(400).send({ error: `Unknown egress "${parsed.data.egressId}".` })
-    const report = await collectIdentity(egress, options, AbortSignal.timeout(45_000))
-    identities.set(egress.id, report)
-    return report
+    let pending = inflight.get(egress.id)
+    if (!pending) {
+      pending = collectIdentity(egress, options, AbortSignal.timeout(45_000))
+        .then((report) => {
+          identities.set(egress.id, report)
+          return report
+        })
+        .finally(() => inflight.delete(egress.id))
+      inflight.set(egress.id, pending)
+    }
+    return pending
   })
 
   app.get('/api/runs', async (request) => {
@@ -111,7 +122,6 @@ export const buildApp = async ({ config, store, runner, runtime, webRoot, logger
     try {
       return reply.code(201).send(runner.start(parsed.data))
     } catch (error) {
-      if (error instanceof RunConflictError) return reply.code(409).send({ error: error.message })
       return reply.code(400).send({ error: error instanceof Error ? error.message : String(error) })
     }
   })
@@ -153,7 +163,7 @@ export const buildApp = async ({ config, store, runner, runtime, webRoot, logger
 
     const unsubscribe = runner.subscribe(id, (event) => {
       send(event)
-      if (event.type === 'run' && event.run.status !== 'running') close()
+      if (event.type === 'run' && isFinished(event.run.status)) close()
     })
     if (!unsubscribe) {
       send({ type: 'run', run: detail })

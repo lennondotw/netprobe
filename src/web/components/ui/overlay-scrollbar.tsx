@@ -10,6 +10,8 @@ import {
 
 /** Minimum thumb length, so a very wide table still has something to grab. */
 const minThumb = 24
+/** How long the bar stays visible after the last scroll, like macOS overlay scrollbars. */
+const lingerMs = 900
 
 export interface ScrollSync {
   /** Called on every scroll or resize of the shared container. */
@@ -80,6 +82,10 @@ export const OverlayScrollbar = ({ sync }: { sync: ScrollSync }) => {
   const drag = useRef<{ pointerId: number; startX: number; startLeft: number } | null>(null)
   const [hovered, setHovered] = useState(false)
   const [dragging, setDragging] = useState(false)
+  // Shown while scrolling, then hidden again once scrolling stops.
+  const [scrolling, setScrolling] = useState(false)
+  const lastLeft = useRef<number | null>(null)
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   const geometry = useCallback(() => {
     const { scrollLeft, scrollWidth, clientWidth } = sync.metrics()
@@ -104,6 +110,12 @@ export const OverlayScrollbar = ({ sync }: { sync: ScrollSync }) => {
       const g = geometry()
       thumb.style.width = `${g.thumb}px`
       thumb.style.transform = `translateX(${g.offset}px)`
+      if (lastLeft.current !== null && lastLeft.current !== g.scrollLeft) {
+        setScrolling(true)
+        clearTimeout(hideTimer.current)
+        hideTimer.current = setTimeout(() => setScrolling(false), lingerMs)
+      }
+      lastLeft.current = g.scrollLeft
     }
     update()
     // The track's own width can settle after the container's (it is sized by container units).
@@ -113,6 +125,7 @@ export const OverlayScrollbar = ({ sync }: { sync: ScrollSync }) => {
     return () => {
       observer.disconnect()
       unsubscribe()
+      clearTimeout(hideTimer.current)
     }
   }, [sync, geometry])
 
@@ -152,9 +165,14 @@ export const OverlayScrollbar = ({ sync }: { sync: ScrollSync }) => {
   }
 
   const active = hovered || dragging
+  const visible = active || scrolling
   return (
+    // The visible track is 6 px tall; an invisible band reaches 6 px above and below it so the
+    // bar is easy to catch without looking any bigger.
     <div
-      className='group/bar relative h-3 w-full touch-none select-none'
+      className={`group/bar relative h-1.5 w-full touch-none transition-opacity select-none before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-[''] ${
+        visible ? 'opacity-100 duration-0' : 'opacity-0 duration-300'
+      }`}
       onPointerDown={onTrackDown}
       onPointerEnter={() => setHovered(true)}
       onPointerLeave={() => setHovered(false)}
@@ -162,18 +180,19 @@ export const OverlayScrollbar = ({ sync }: { sync: ScrollSync }) => {
     >
       <div
         aria-hidden='true'
-        className={`pointer-events-none absolute inset-x-0 bottom-0.5 h-1.5 rounded-full transition-colors ${
+        className={`pointer-events-none absolute inset-0 rounded-full transition-colors ${
           active ? 'bg-foreground/[0.06] duration-0' : 'bg-transparent duration-150'
         }`}
       />
       <div
         // Instant in, fast out: state changes land at once and ease back when the pointer leaves.
-        className={`absolute bottom-0.5 left-0 rounded-full transition-[height,background-color] ease-[cubic-bezier(0.2,0,0,1)] ${
+        // Its own hit band matches the track's, so grabbing never misses a thin thumb.
+        className={`absolute bottom-0 left-0 rounded-full transition-[height,background-color] ease-[cubic-bezier(0.2,0,0,1)] before:absolute before:inset-x-0 before:-top-2 before:-bottom-1.5 before:content-[''] ${
           dragging
             ? 'h-1.5 bg-foreground/55 duration-0'
             : active
               ? 'h-1.5 bg-foreground/40 duration-0'
-              : 'h-1 bg-foreground/25 duration-150'
+              : 'h-1 bg-foreground/30 duration-150'
         }`}
         onLostPointerCapture={endDrag}
         onPointerCancel={endDrag}

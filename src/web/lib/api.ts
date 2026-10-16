@@ -33,8 +33,13 @@ export const queryKeys = {
   run: (id: string) => ['run', id] as const,
 }
 
+// Polled so a page notices runs started elsewhere (another viewer, another tab).
 export const useConfig = () =>
-  useQuery({ queryKey: queryKeys.config, queryFn: () => request<AppConfig>('/api/config') })
+  useQuery({
+    queryKey: queryKeys.config,
+    queryFn: () => request<AppConfig>('/api/config'),
+    refetchInterval: 5_000,
+  })
 
 export const useLatest = () =>
   useQuery({ queryKey: queryKeys.latest, queryFn: () => request<LatestResult[]>('/api/latest') })
