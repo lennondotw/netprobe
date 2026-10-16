@@ -171,13 +171,15 @@ const Connectivity = ({
       <PageHeader
         actions={
           <>
-            <Segmented
-              disabled={running}
-              label='Mode'
-              onChange={setMode}
-              options={modes}
-              value={mode}
-            />
+            {config.modules.downloads && (
+              <Segmented
+                disabled={running}
+                label='Mode'
+                onChange={setMode}
+                options={modes}
+                value={mode}
+              />
+            )}
             <Select
               disabled={running}
               label='Egress'

@@ -12,6 +12,7 @@ const navItems = [
   },
   {
     href: '/egress',
+    module: 'egress',
     label: 'Egress',
     icon: (
       <>
@@ -22,6 +23,7 @@ const navItems = [
   },
   {
     href: '/host',
+    module: 'host',
     label: 'Host',
     icon: (
       <>
@@ -70,6 +72,7 @@ const RuntimeFooter = () => {
 
 export const AppShell = ({ children }: { children: ReactNode }) => {
   const pathname = usePathname()
+  const modules = useConfig().data?.modules
   return (
     <div className='flex min-h-screen w-full flex-col lg:flex-row'>
       <div className='flex shrink-0 flex-col border-b border-line bg-sidebar lg:sticky lg:top-0 lg:h-screen lg:w-48 lg:border-r lg:border-b-0'>
@@ -91,35 +94,37 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
         </div>
         <nav aria-label='Pages' className='min-w-0 px-2 pb-1.5 lg:flex-1 lg:py-1'>
           <ul className='flex gap-0.5 lg:flex-col'>
-            {navItems.map((item) => {
-              const active = isActive(pathname, item.href)
-              return (
-                <li key={item.href}>
-                  <Link
-                    aria-current={active ? 'page' : undefined}
-                    className={`group snap flex h-8 items-center gap-2 rounded-md px-2 text-[13px] ${
-                      active
-                        ? 'bg-active font-medium text-foreground'
-                        : 'text-secondary hover:bg-hover hover:text-foreground'
-                    }`}
-                    href={item.href}
-                  >
-                    <svg
-                      aria-hidden='true'
-                      className={`snap-group size-4 shrink-0 fill-none stroke-current stroke-[1.3] ${
-                        active ? 'text-foreground' : 'text-muted group-hover:text-foreground'
+            {navItems
+              .filter((item) => !('module' in item) || modules?.[item.module] !== false)
+              .map((item) => {
+                const active = isActive(pathname, item.href)
+                return (
+                  <li key={item.href}>
+                    <Link
+                      aria-current={active ? 'page' : undefined}
+                      className={`group snap flex h-8 items-center gap-2 rounded-md px-2 text-[13px] ${
+                        active
+                          ? 'bg-active font-medium text-foreground'
+                          : 'text-secondary hover:bg-hover hover:text-foreground'
                       }`}
-                      strokeLinecap='round'
-                      strokeLinejoin='round'
-                      viewBox='0 0 16 16'
+                      href={item.href}
                     >
-                      {item.icon}
-                    </svg>
-                    {item.label}
-                  </Link>
-                </li>
-              )
-            })}
+                      <svg
+                        aria-hidden='true'
+                        className={`snap-group size-4 shrink-0 fill-none stroke-current stroke-[1.3] ${
+                          active ? 'text-foreground' : 'text-muted group-hover:text-foreground'
+                        }`}
+                        strokeLinecap='round'
+                        strokeLinejoin='round'
+                        viewBox='0 0 16 16'
+                      >
+                        {item.icon}
+                      </svg>
+                      {item.label}
+                    </Link>
+                  </li>
+                )
+              })}
           </ul>
         </nav>
         <RuntimeFooter />

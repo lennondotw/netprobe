@@ -61,26 +61,39 @@ export const buildApp = async ({ config, store, runner, runtime, webRoot, logger
     limits: { maxRepeats: 20, downloadConnections: config.download.connections },
     runtime,
     activeRunId: runner.activeRunId,
+    modules: {
+      downloads: config.modules.downloads,
+      host: config.modules.host,
+      egress: config.modules.egress !== null,
+      browserCheck: config.modules.egress?.browserCheck ?? false,
+    },
   }))
 
   app.get('/api/latest', async () => store.latestResults())
 
-  app.get('/api/host', async () => collectHostInfo(runtime))
+  app.get('/api/host', async (_request, reply) => {
+    if (!config.modules.host) return reply.code(404).send({ error: 'The Host page is disabled.' })
+    return collectHostInfo(runtime)
+  })
 
   // Identity checks call many third-party services, so results are kept per egress until re-run.
   const identities = new Map<string, IdentityReport>()
 
-  app.get('/api/identity', async (request) => {
+  app.get('/api/identity', async (request, reply) => {
+    if (!config.modules.egress)
+      return reply.code(404).send({ error: 'The Egress page is disabled.' })
     const { egressId } = z.object({ egressId: z.string() }).parse(request.query)
     return identities.get(egressId) ?? null
   })
 
   app.post('/api/identity', async (request, reply) => {
+    const options = config.modules.egress
+    if (!options) return reply.code(404).send({ error: 'The Egress page is disabled.' })
     const parsed = z.object({ egressId: z.string() }).safeParse(request.body)
     if (!parsed.success) return reply.code(400).send({ error: z.prettifyError(parsed.error) })
     const egress = config.egress.find((e) => e.id === parsed.data.egressId)
     if (!egress) return reply.code(400).send({ error: `Unknown egress "${parsed.data.egressId}".` })
-    const report = await collectIdentity(egress, AbortSignal.timeout(45_000))
+    const report = await collectIdentity(egress, options, AbortSignal.timeout(45_000))
     identities.set(egress.id, report)
     return report
   })

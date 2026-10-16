@@ -157,11 +157,13 @@ const Egress = ({ config }: { config: AppConfig }) => {
       {check.isPending && !report && <ListSkeleton groups={2} rows={5} />}
       {report && <Report report={report} />}
 
-      <BrowserSection
-        onRun={() => browser.mutate()}
-        pending={browser.isPending}
-        result={browser.data ?? null}
-      />
+      {config.modules.browserCheck && (
+        <BrowserSection
+          onRun={() => browser.mutate()}
+          pending={browser.isPending}
+          result={browser.data ?? null}
+        />
+      )}
     </>
   )
 }

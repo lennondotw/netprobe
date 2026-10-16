@@ -8,5 +8,5 @@ export default defineConfig({
   trailingComma: 'all',
   tabWidth: 2,
   sortImports: true,
-  ignorePatterns: ['pnpm-lock.yaml', 'dist/', 'data/'],
+  ignorePatterns: ['pnpm-lock.yaml', 'dist/', 'data/', 'config/netprobe.schema.json'],
 })

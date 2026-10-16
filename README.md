@@ -100,8 +100,53 @@ Running on the host matters when the host routes traffic differently from contai
 ## Configuration
 
 All configuration lives in one YAML file (`NETPROBE_CONFIG`, default `config/netprobe.yaml`).
-[`config/netprobe.example.yaml`](config/netprobe.example.yaml) documents every option: probe
-counts and timeouts, download limits, egress proxies, hiding presets, and adding targets.
+Start from [`config/netprobe.example.yaml`](config/netprobe.example.yaml), which documents every
+option. Its first line points editors that use yaml-language-server (such as VS Code with the
+YAML extension) at [`config/netprobe.schema.json`](config/netprobe.schema.json), for completion
+of every key and built-in id, hover documentation, and validation as you type.
+
+```yaml
+# yaml-language-server: $schema=./netprobe.schema.json
+modules:
+  downloads: false # no throughput tests on this link
+  host: true
+  egress:
+    excludeSources: [ip-api] # skip one third-party service
+    dnsLeakTest: false
+
+exits:
+  - id: direct
+    name: Direct
+  - id: office
+    name: Office proxy
+    proxy: socks5h://10.0.0.2:1080
+
+presets:
+  exclude: [social, github.objects] # a whole service, or one target
+  excludeCategories: [Regional]
+
+services:
+  - id: internal # a new service; targets can be bare URLs
+    category: Internal
+    targets:
+      - https://wiki.internal/
+      - icmp://10.0.0.1
+  - id: aws # reuse a built-in id to add or replace targets
+    targets:
+      - id: accelerate
+        url: https://my-bucket.s3-accelerate.amazonaws.com/
+        expectStatus: 403
+        check: reachability
+```
+
+| Module      | Turn off when                                                                       |
+| ----------- | ----------------------------------------------------------------------------------- |
+| `downloads` | The link is metered or shared: throughput tests transfer real data.                 |
+| `host`      | Others on the network should not see this machine's interfaces, routes, and DNS.    |
+| `egress`    | The host must not contact third-party IP information services. Or tune its sources. |
+
+The server rejects unknown keys and misspelled built-in ids at startup, listing every problem
+with its path and a suggestion where one is close.
 
 Targets come only from this file. The web UI cannot add or edit URLs, so anyone who can open
 the page can trigger measurements but cannot make the server request arbitrary addresses.

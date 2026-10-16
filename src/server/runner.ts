@@ -385,7 +385,7 @@ export class Runner {
       publicIpError: null,
     }
     try {
-      const body = await fetchText(this.#config.egressCheckUrl, {
+      const body = await fetchText(this.#config.publicIpCheckUrl, {
         proxy: egress.rawProxy,
         ipFamily: params.ipFamily,
         timeoutMs: this.#config.probe.timeoutMs,

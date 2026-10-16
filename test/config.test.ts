@@ -1,7 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
 
+import Ajv from 'ajv'
+import { describe, expect, it } from 'vitest'
+import { parse as parseYaml } from 'yaml'
+
+import { buildSchema, renderSchema, schemaPath } from '../scripts/schema.ts'
 import { median, summarize, worstOutcome } from '../src/server/classify.ts'
-import { resolveConfig } from '../src/server/config.ts'
+import { loadConfig, resolveConfig } from '../src/server/config.ts'
 import { redactProxy, redactUrl } from '../src/server/redact.ts'
 import type { Attempt } from '../src/shared/types.ts'
 
@@ -25,11 +30,13 @@ describe('config', () => {
     const config = resolveConfig({})
     expect(config.services.map((s) => s.id)).toContain('github')
     expect(config.egress).toEqual([{ id: 'direct', name: 'Direct', proxy: null, rawProxy: null }])
+    expect(config.modules).toMatchObject({ downloads: true, host: true })
+    expect(config.modules.egress).toMatchObject({ reputation: true, dnsLeakTest: true })
   })
 
-  it('appends configured targets to a preset service and hides excluded presets', () => {
+  it('adds targets to a preset service and leaves out excluded services and targets', () => {
     const config = resolveConfig({
-      presets: { exclude: ['vercel'] },
+      presets: { exclude: ['vercel', 'github.objects'] },
       services: [
         { id: 'aws', targets: [{ id: 'cdn', name: 'My CDN', url: 'https://cdn.example.com/' }] },
       ],
@@ -37,17 +44,113 @@ describe('config', () => {
     expect(config.services.find((s) => s.id === 'vercel')).toBeUndefined()
     expect(config.targets.get('aws.cdn')?.name).toBe('My CDN')
     expect(config.targets.get('aws.s3-global')).toBeDefined()
+    expect(config.targets.get('github.objects')).toBeUndefined()
+    expect(config.targets.get('github.web')).toBeDefined()
   })
 
-  it('never exposes proxy credentials in the public egress list', () => {
+  it('excludes whole categories, or every preset', () => {
+    const noRegional = resolveConfig({ presets: { excludeCategories: ['Regional'] } })
+    expect(noRegional.services.some((s) => s.category === 'Regional')).toBe(false)
+    const none = resolveConfig({
+      presets: { enabled: false },
+      services: [{ id: 'mine', targets: ['https://example.com/'] }],
+    })
+    expect(none.services.map((s) => s.id)).toEqual(['mine'])
+  })
+
+  it('expands URL shorthands and single-status expectations', () => {
     const config = resolveConfig({
-      egress: [{ id: 'proxy', name: 'Proxy', proxy: 'http://user:pw@proxy.local:8080' }],
+      presets: { enabled: false },
+      services: [
+        {
+          id: 'mine',
+          targets: [
+            'https://wiki.example.com/',
+            'icmp://10.0.0.1',
+            { url: 'https://api.example.com/', expectStatus: '4xx' },
+          ],
+        },
+      ],
+    })
+    expect(config.targets.get('mine.wiki-example-com')).toMatchObject({
+      name: 'wiki.example.com',
+      kind: 'http',
+      expectStatus: [200],
+    })
+    expect(config.targets.get('mine.10-0-0-1')?.kind).toBe('icmp')
+    expect(config.targets.get('mine.api-example-com')?.expectStatus).toEqual(['4xx'])
+  })
+
+  it('drops download targets when downloads are disabled', () => {
+    const config = resolveConfig({ modules: { downloads: false } })
+    expect([...config.targets.values()].some((t) => t.download)).toBe(false)
+  })
+
+  it('accepts the egress module as a boolean or settings', () => {
+    expect(resolveConfig({ modules: { egress: false } }).modules.egress).toBeNull()
+    expect(
+      resolveConfig({ modules: { egress: { excludeSources: ['ip-api'], reputation: false } } })
+        .modules.egress,
+    ).toEqual({
+      excludeSources: ['ip-api'],
+      reputation: false,
+      dnsLeakTest: true,
+      browserCheck: true,
+    })
+  })
+
+  it('never exposes proxy credentials in the public exit list', () => {
+    const config = resolveConfig({
+      exits: [{ id: 'proxy', name: 'Proxy', proxy: 'http://user:pw@proxy.local:8080' }],
     })
     expect(config.egress[0]?.proxy).toBe('http://proxy.local:8080')
   })
 
-  it('rejects invalid ids with a readable error', () => {
-    expect(() => resolveConfig({ egress: [{ id: 'Bad Id', name: 'x' }] })).toThrow()
+  it.each([
+    [{ egress: [] }, 'egress'],
+    [{ probe: { repeat: 3 } }, 'repeat'],
+    [{ presets: { exclude: ['githb'] } }, 'githb'],
+    [{ presets: { excludeCategories: ['Nowhere'] } }, 'Nowhere'],
+    [{ exits: [{ id: 'Bad Id', name: 'x' }] }, 'lowercase'],
+    [{ services: [{ id: 'x', targets: ['https://a.com/', 'https://a.com/'] }] }, 'duplicate'],
+  ])('rejects %j with a message naming the problem', (input, fragment) => {
+    expect(() => resolveConfig(input)).toThrow(fragment)
+  })
+})
+
+describe('example config and schema', () => {
+  const ajv = new Ajv({ allErrors: true, strict: false })
+  const validate = ajv.compile(buildSchema())
+
+  it('ships a schema that matches the code', () => {
+    // If this fails, run `pnpm schema` and commit the result.
+    expect(readFileSync(schemaPath, 'utf8')).toBe(renderSchema())
+  })
+
+  it('parses the example as shipped', () => {
+    const config = loadConfig('config/netprobe.example.yaml')
+    expect(config.egress[0]?.id).toBe('direct')
+  })
+
+  it('validates the example, including its commented-out sections', () => {
+    const text = readFileSync('config/netprobe.example.yaml', 'utf8')
+    // Uncomment the example blocks ("#  " / "  # ") to check them too.
+    const expanded = text
+      .replace(/^services: \[\]$/m, 'services:')
+      .replace(/^# {2}(\S.*|  .*)$/gm, '  $1')
+      .replace(/^ {2}# (- id: |  \S)/gm, '  $1')
+    const parsed = parseYaml(expanded) as Record<string, unknown>
+    expect(Array.isArray(parsed.services)).toBe(true)
+    expect((parsed.services as unknown[]).length).toBeGreaterThan(2)
+    expect(validate(parsed), JSON.stringify(validate.errors)).toBe(true)
+    expect(() => resolveConfig(parsed)).not.toThrow()
+  })
+
+  it('agrees with the server on what is invalid', () => {
+    for (const input of [{ probe: { repeat: 3 } }, { modules: { egress: 'yes' } }, { exits: [] }]) {
+      expect(validate(input)).toBe(false)
+      expect(() => resolveConfig(input)).toThrow()
+    }
   })
 })
 
@@ -90,13 +193,5 @@ describe('summaries', () => {
     expect(median([3, 1, 2])).toBe(2)
     expect(median([1, 2, 3, 4])).toBe(2.5)
     expect(median([])).toBeNull()
-  })
-})
-
-describe('example config', () => {
-  it('parses as shipped', async () => {
-    const { loadConfig } = await import('../src/server/config.ts')
-    const config = loadConfig('config/netprobe.example.yaml')
-    expect(config.egress[0]?.id).toBe('direct')
   })
 })

@@ -1,6 +1,7 @@
 import type { ServiceInput } from '../config.ts'
 
-export type Target = NonNullable<ServiceInput['targets']>[number]
+/** The object form of a target (presets never use the URL shorthand). */
+export type Target = Exclude<NonNullable<ServiceInput['targets']>[number], string>
 
 /**
  * A website or web app. HEAD keeps homepages from being downloaded on every attempt, and any 2xx

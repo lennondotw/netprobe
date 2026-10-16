@@ -1,0 +1,641 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Netprobe configuration",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "description": "Path or URL of this file’s JSON Schema.",
+      "type": "string"
+    },
+    "hostLabel": {
+      "description": "Name shown in the UI and stored with each run. Defaults to the hostname.",
+      "type": "string"
+    },
+    "modules": {
+      "description": "Turn optional parts of Netprobe on or off.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "downloads": {
+          "default": true,
+          "description": "Download throughput tests. They transfer real data; disable on metered links.",
+          "type": "boolean"
+        },
+        "host": {
+          "default": true,
+          "description": "The Host page: system details, interfaces, routes, DNS, and proxy settings, visible to anyone who can open Netprobe.",
+          "type": "boolean"
+        },
+        "egress": {
+          "default": true,
+          "description": "The Egress page: asks third-party services about this host’s public addresses. true, false, or settings.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "excludeSources": {
+                  "default": [],
+                  "description": "Third-party IP information services not to query.",
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "cloudflare",
+                      "ipify",
+                      "ipleak",
+                      "ipinfo",
+                      "ip-api",
+                      "ipapi-is",
+                      "ipwho",
+                      "ip-sb",
+                      "ipapi-co",
+                      "geojs",
+                      "ipquery",
+                      "ifconfig-co",
+                      "ipip",
+                      "myip-la"
+                    ]
+                  }
+                },
+                "reputation": {
+                  "default": true,
+                  "description": "Look up each exit address on proxycheck.io (type, VPN/proxy flags, risk).",
+                  "type": "boolean"
+                },
+                "dnsLeakTest": {
+                  "default": true,
+                  "description": "Run the bash.ws DNS leak test in addition to the whoami TXT lookups.",
+                  "type": "boolean"
+                },
+                "browserCheck": {
+                  "default": true,
+                  "description": "Offer the WebRTC and public-address check for the browser viewing the page.",
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": false,
+              "description": "Egress page settings."
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "probe": {
+      "description": "Quick-mode probing.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "repeats": {
+          "default": 5,
+          "description": "Default attempts per target.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20
+        },
+        "connectTimeoutMs": {
+          "default": 5000,
+          "description": "Connection timeout per attempt.",
+          "type": "integer",
+          "minimum": 500,
+          "maximum": 60000
+        },
+        "timeoutMs": {
+          "default": 15000,
+          "description": "Total time limit per attempt.",
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 120000
+        },
+        "concurrency": {
+          "default": 8,
+          "description": "Targets probed in parallel. Downloads always run one at a time.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        }
+      },
+      "additionalProperties": false
+    },
+    "download": {
+      "description": "Download-mode limits.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "connections": {
+          "default": 4,
+          "description": "Connections for the parallel measurement.",
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 16
+        },
+        "timeoutMs": {
+          "default": 120000,
+          "description": "Time limit per download.",
+          "type": "integer",
+          "minimum": 5000,
+          "maximum": 600000
+        },
+        "maxBytes": {
+          "default": 209715200,
+          "description": "Hard cap per request; larger files are aborted rather than downloaded.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "additionalProperties": false
+    },
+    "ipFamily": {
+      "default": "auto",
+      "description": "Default IP family for runs; each run can override it.",
+      "type": "string",
+      "enum": [
+        "auto",
+        "ipv4",
+        "ipv6"
+      ]
+    },
+    "publicIpCheckUrl": {
+      "default": "https://www.cloudflare.com/cdn-cgi/trace",
+      "description": "Echoes the public IP (as `ip=` lines or a bare address); recorded with every run.",
+      "type": "string",
+      "format": "uri"
+    },
+    "exits": {
+      "default": [
+        {
+          "id": "direct",
+          "name": "Direct"
+        }
+      ],
+      "description": "Network exits to compare. The first is the default.",
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "description": "Exit id, stored with every run. Lowercase letters, digits, and dashes."
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Shown in the egress picker."
+          },
+          "proxy": {
+            "description": "http://, https://, socks5:// (DNS resolved locally), or socks5h:// (DNS resolved by the proxy). Credentials in the URL are never shown or logged. Omit for a direct connection.",
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "additionalProperties": false,
+        "description": "A network exit runs can be sent through."
+      }
+    },
+    "presets": {
+      "description": "The built-in services.",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Set to false to start from no built-in services at all.",
+          "type": "boolean"
+        },
+        "exclude": {
+          "default": [],
+          "description": "Built-in services (\"social\") or single targets (\"github.objects\") to leave out.",
+          "type": "array",
+          "items": {
+            "enum": [
+              "latency",
+              "connectivity",
+              "udp",
+              "dns-plain",
+              "dns-encrypted",
+              "apple",
+              "microsoft",
+              "google",
+              "cloudflare",
+              "github",
+              "github-actions",
+              "registries",
+              "code-hosting",
+              "aws",
+              "vercel",
+              "apple-notary",
+              "npm",
+              "reference",
+              "tailscale",
+              "tailscale-derp",
+              "social",
+              "collaboration",
+              "china",
+              "latency.icmp-cloudflare",
+              "latency.icmp-google",
+              "latency.icmp-quad9",
+              "latency.icmp-alidns",
+              "latency.icmp-dnspod",
+              "latency.tcp-cloudflare",
+              "latency.tcp-google",
+              "connectivity.gstatic-204",
+              "connectivity.android-204",
+              "connectivity.apple-captive",
+              "connectivity.microsoft-ncsi",
+              "connectivity.firefox-portal",
+              "connectivity.cloudflare-trace",
+              "udp.stun-google",
+              "udp.stun-cloudflare",
+              "udp.stun-twilio",
+              "udp.quic-cloudflare",
+              "udp.quic-google",
+              "dns-plain.cloudflare",
+              "dns-plain.google",
+              "dns-plain.quad9",
+              "dns-plain.opendns",
+              "dns-plain.alidns",
+              "dns-plain.dnspod",
+              "dns-encrypted.dot-cloudflare",
+              "dns-encrypted.dot-google",
+              "dns-encrypted.dot-quad9",
+              "dns-encrypted.dot-alidns",
+              "dns-encrypted.doh-cloudflare",
+              "dns-encrypted.doh-google",
+              "dns-encrypted.doh-alidns",
+              "dns-encrypted.doh3-cloudflare",
+              "dns-encrypted.doq-adguard",
+              "dns-encrypted.doq-nextdns",
+              "dns-encrypted.doq-alidns",
+              "apple.web",
+              "apple.icloud",
+              "apple.app-store",
+              "apple.developer",
+              "apple.software-update",
+              "apple.apns",
+              "apple.apns-5223",
+              "microsoft.web",
+              "microsoft.entra",
+              "microsoft.graph",
+              "microsoft.office",
+              "microsoft.teams",
+              "microsoft.bing",
+              "google.web",
+              "google.accounts",
+              "google.gmail",
+              "google.fonts",
+              "google.storage",
+              "google.gemini",
+              "cloudflare.web",
+              "cloudflare.one",
+              "cloudflare.api",
+              "github.web",
+              "github.api",
+              "github.raw",
+              "github.codeload",
+              "github.release-assets",
+              "github.objects",
+              "github.ghcr",
+              "github.release-download",
+              "github-actions.pipelines",
+              "github-actions.results",
+              "github-actions.blob",
+              "registries.docker-hub",
+              "registries.docker-auth",
+              "registries.docker-blobs",
+              "registries.pypi",
+              "registries.pypi-files",
+              "registries.crates",
+              "registries.go-proxy",
+              "registries.maven",
+              "registries.homebrew",
+              "registries.cocoapods",
+              "registries.jsdelivr",
+              "registries.unpkg",
+              "code-hosting.gitlab",
+              "code-hosting.bitbucket",
+              "code-hosting.huggingface",
+              "code-hosting.openai",
+              "code-hosting.anthropic",
+              "aws.s3-global",
+              "aws.s3-us-west-2",
+              "aws.cloudfront",
+              "vercel.web",
+              "vercel.api",
+              "apple-notary.notary-api",
+              "apple-notary.upload-accelerated",
+              "apple-notary.upload-standard",
+              "apple-notary.timestamp",
+              "npm.registry",
+              "npm.metadata",
+              "npm.tarball",
+              "reference.cloudflare-25mb",
+              "tailscale.control",
+              "tailscale.login",
+              "tailscale.log",
+              "tailscale.pkgs",
+              "tailscale-derp.nyc-https",
+              "tailscale-derp.nyc-stun",
+              "tailscale-derp.sfo-https",
+              "tailscale-derp.sfo-stun",
+              "tailscale-derp.sea-https",
+              "tailscale-derp.sea-stun",
+              "tailscale-derp.fra-https",
+              "tailscale-derp.fra-stun",
+              "tailscale-derp.lhr-https",
+              "tailscale-derp.lhr-stun",
+              "tailscale-derp.sin-https",
+              "tailscale-derp.sin-stun",
+              "tailscale-derp.tok-https",
+              "tailscale-derp.tok-stun",
+              "tailscale-derp.hkg-https",
+              "tailscale-derp.hkg-stun",
+              "tailscale-derp.syd-https",
+              "tailscale-derp.syd-stun",
+              "social.x",
+              "social.youtube",
+              "social.instagram",
+              "social.facebook",
+              "social.reddit",
+              "social.discord",
+              "social.telegram",
+              "social.telegram-api",
+              "social.whatsapp",
+              "social.linkedin",
+              "social.tiktok",
+              "collaboration.slack",
+              "collaboration.zoom",
+              "collaboration.notion",
+              "collaboration.figma",
+              "collaboration.linear",
+              "collaboration.atlassian",
+              "collaboration.dropbox",
+              "china.baidu",
+              "china.qq",
+              "china.aliyun",
+              "china.bilibili",
+              "china.aliyun-mirror",
+              "china.tuna-mirror",
+              "china.npmmirror"
+            ],
+            "description": "A built-in service id, or service.target for a single target."
+          }
+        },
+        "excludeCategories": {
+          "default": [],
+          "description": "Built-in categories to leave out, e.g. \"Regional\".",
+          "type": "array",
+          "items": {
+            "enum": [
+              "Network",
+              "DNS",
+              "Platforms",
+              "Developer",
+              "Cloud",
+              "Tailscale",
+              "Social & tools",
+              "Regional"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "services": {
+      "default": [],
+      "description": "Services to add, or to extend built-in services by reusing their id.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "description": "Service id. Reusing a built-in id (e.g. \"aws\") adds targets to that service or replaces targets with the same id.",
+            "anyOf": [
+              {
+                "enum": [
+                  "latency",
+                  "connectivity",
+                  "udp",
+                  "dns-plain",
+                  "dns-encrypted",
+                  "apple",
+                  "microsoft",
+                  "google",
+                  "cloudflare",
+                  "github",
+                  "github-actions",
+                  "registries",
+                  "code-hosting",
+                  "aws",
+                  "vercel",
+                  "apple-notary",
+                  "npm",
+                  "reference",
+                  "tailscale",
+                  "tailscale-derp",
+                  "social",
+                  "collaboration",
+                  "china"
+                ]
+              },
+              {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]*$"
+              }
+            ]
+          },
+          "name": {
+            "description": "Display name. Defaults to the id.",
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "description": "One line shown next to the service name.",
+            "type": "string"
+          },
+          "category": {
+            "description": "Tab the service appears under, e.g. \"Network\" or a new one such as \"Internal\".",
+            "type": "string",
+            "examples": [
+              "Network",
+              "DNS",
+              "Platforms",
+              "Developer",
+              "Cloud",
+              "Tailscale",
+              "Social & tools",
+              "Regional"
+            ]
+          },
+          "targets": {
+            "default": [],
+            "description": "Targets of this service.",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uri",
+                  "description": "What to probe; the scheme picks the probe.\nhttp(s)://… — through curl, with DNS/TCP/TLS/TTFB timings and a status check.\nicmp://host — ping.\ntcp://host:port — TCP connect.\ndns://server[:port]?name=example.com&type=A — one DNS query over UDP.\ndot://server[:port]?name=example.com&sni=host — DNS over TLS.\nstun://host[:port] — STUN binding; reports the public UDP address.\nquic://host[:port] — QUIC version negotiation (HTTP/3, DoQ reachability)."
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "description": "Unique within the service. Defaults to one derived from the URL host. Reuse a built-in target id to replace it.",
+                      "type": "string",
+                      "pattern": "^[a-z0-9][a-z0-9-]*$"
+                    },
+                    "name": {
+                      "description": "Display name. Defaults to the URL host.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "url": {
+                      "type": "string",
+                      "format": "uri",
+                      "description": "What to probe; the scheme picks the probe.\nhttp(s)://… — through curl, with DNS/TCP/TLS/TTFB timings and a status check.\nicmp://host — ping.\ntcp://host:port — TCP connect.\ndns://server[:port]?name=example.com&type=A — one DNS query over UDP.\ndot://server[:port]?name=example.com&sni=host — DNS over TLS.\nstun://host[:port] — STUN binding; reports the public UDP address.\nquic://host[:port] — QUIC version negotiation (HTTP/3, DoQ reachability)."
+                    },
+                    "method": {
+                      "default": "GET",
+                      "description": "HTTP method. HEAD avoids downloading page bodies.",
+                      "type": "string",
+                      "enum": [
+                        "GET",
+                        "HEAD"
+                      ]
+                    },
+                    "expectStatus": {
+                      "description": "Healthy HTTP status or statuses. Default 200.",
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 100,
+                              "maximum": 599
+                            },
+                            {
+                              "type": "string",
+                              "enum": [
+                                "2xx",
+                                "3xx",
+                                "4xx",
+                                "5xx"
+                              ]
+                            }
+                          ],
+                          "description": "An exact HTTP status such as 200, or a class such as \"2xx\"."
+                        },
+                        {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 100,
+                                "maximum": 599
+                              },
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "2xx",
+                                  "3xx",
+                                  "4xx",
+                                  "5xx"
+                                ]
+                              }
+                            ],
+                            "description": "An exact HTTP status such as 200, or a class such as \"2xx\"."
+                          }
+                        }
+                      ]
+                    },
+                    "check": {
+                      "default": "response",
+                      "description": "\"reachability\" marks endpoints that answer with an error by design (e.g. 401 without credentials): the expected status proves the path, not that real requests would work.",
+                      "type": "string",
+                      "enum": [
+                        "response",
+                        "reachability"
+                      ]
+                    },
+                    "followRedirects": {
+                      "description": "Follow redirects. Default: only for downloads.",
+                      "type": "boolean"
+                    },
+                    "headers": {
+                      "description": "Extra request headers (HTTP only).",
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "samples": {
+                      "description": "Minimum attempts per run, e.g. more pings for meaningful jitter and loss.",
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 50
+                    },
+                    "note": {
+                      "description": "Shown in the target’s detail dialog.",
+                      "type": "string"
+                    },
+                    "download": {
+                      "description": "Makes this a download target, measured in Download mode instead of Quick mode.",
+                      "type": "object",
+                      "properties": {
+                        "bytes": {
+                          "description": "Exact size in bytes. When set, any other size counts as a failed transfer.",
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "parallel": {
+                          "default": "range",
+                          "description": "\"range\" also measures with several connections, each fetching part of the file; use \"none\" if the server ignores Range requests.",
+                          "type": "string",
+                          "enum": [
+                            "range",
+                            "none"
+                          ]
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "url"
+                  ],
+                  "additionalProperties": false,
+                  "description": "A target to probe."
+                }
+              ],
+              "description": "A target, or just its URL as a shorthand."
+            }
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false,
+        "description": "A group of targets shown and run together."
+      }
+    }
+  },
+  "additionalProperties": false,
+  "description": "Netprobe configuration."
+}

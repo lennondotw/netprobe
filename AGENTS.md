@@ -28,6 +28,9 @@ erasable syntax only (no enums, namespaces, or parameter properties).
 - Hover details go through `ui/tooltip.tsx`: a DataTable column's `tooltip` (grouped per column)
   or `InfoHint` (all hints share one group). Each group has one popup root and its own warm-up
   timer; whole cells or label + icon are the hit targets, and popups ignore the pointer.
+- The config format is defined once, in zod (`src/server/config.ts`), with a description on
+  every field. After changing it or the presets, run `pnpm schema` to regenerate
+  `config/netprobe.schema.json`; a test fails while the two disagree.
 - Add focused tests for classification and config parsing changes.
 - Conventional commits; commit whenever typecheck and build pass.
 

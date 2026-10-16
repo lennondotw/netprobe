@@ -223,6 +223,8 @@ export interface AppConfig {
   limits: { maxRepeats: number; downloadConnections: number }
   runtime: RuntimeInfo
   activeRunId: string | null
+  /** Optional parts of the app, as enabled in the config file. */
+  modules: { downloads: boolean; host: boolean; egress: boolean; browserCheck: boolean }
 }
 
 export interface LatestResult {

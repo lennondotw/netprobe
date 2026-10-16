@@ -1,11 +1,26 @@
-# Copy to config/netprobe.yaml and edit. Every key is optional; without a config file the
-# built-in presets run over a direct connection.
+# yaml-language-server: $schema=./netprobe.schema.json
+#
+# Netprobe configuration. Copy to config/netprobe.yaml and edit; every key is optional.
+# With the YAML extension in VS Code (or any editor using yaml-language-server), the line above
+# gives completion, hover docs, and validation from netprobe.schema.json in this folder.
 
-# Label shown in the UI and stored with each run. Defaults to the hostname.
+# Name shown in the UI and stored with each run. Defaults to the hostname.
 # hostLabel: build-runner
 
+# Optional parts of Netprobe.
+modules:
+  downloads: true # throughput tests transfer real data; turn off on metered links
+  host: true # Host page: system, interfaces, routes, DNS, proxies — visible on the LAN
+  # Egress page: asks third-party services about this host's public addresses.
+  # Use true / false, or settings:
+  egress:
+    excludeSources: [] # e.g. [ip-api, ipinfo]
+    reputation: true # proxycheck.io lookups for each exit address
+    dnsLeakTest: true # bash.ws leak test
+    browserCheck: true # WebRTC check for the browser viewing the page
+
 probe:
-  repeats: 5 # attempts per target in a quick run
+  repeats: 5 # default attempts per target
   connectTimeoutMs: 5000
   timeoutMs: 15000
   concurrency: 8 # targets probed in parallel (downloads always run one at a time)
@@ -15,89 +30,67 @@ download:
   timeoutMs: 120000
   maxBytes: 209715200 # requests for anything larger are aborted
 
-# auto | ipv4 | ipv6 — the default in the UI; each run can override it.
-ipFamily: auto
+ipFamily: auto # auto | ipv4 | ipv6 — default for runs; each run can override it
 
-# Endpoint that echoes the public IP, as `ip=` lines or a bare address.
-egressCheckUrl: https://www.cloudflare.com/cdn-cgi/trace
-
-# Network exits to compare. The first entry is the default. Proxy credentials stay on the
-# server; the UI only shows scheme, host, and port.
-egress:
+# Network exits to compare; the first is the default. Proxy credentials never reach the UI or logs.
+exits:
   - id: direct
     name: Direct
   # - id: office-proxy
   #   name: Office proxy
-  #   # socks5h resolves DNS on the proxy; socks5 resolves locally. Results can differ.
-  #   proxy: socks5h://10.0.0.2:1080
+  #   proxy: socks5h://10.0.0.2:1080 # socks5h resolves DNS on the proxy; socks5 resolves locally
   # - id: http-proxy
   #   name: HTTP proxy
   #   proxy: http://user:password@proxy.internal:3128
 
+# Built-in services. Completion lists every id.
 presets:
-  # Hide built-in services by id. Network: latency, connectivity, udp, reference.
-  # DNS: dns-plain, dns-encrypted. Platforms: apple, microsoft, google, cloudflare.
-  # Developer: github, github-actions, registries, code-hosting, apple-notary, npm.
-  # Cloud: aws, vercel. Tailscale: tailscale, tailscale-derp.
-  # Social & tools: social, collaboration. Regional: china.
-  exclude: []
+  enabled: true # false starts from no built-in services at all
+  exclude: [] # services ("social") or single targets ("github.objects")
+  excludeCategories: [] # e.g. [Regional]
 
-# Add services, or targets to a built-in service by reusing its id.
-# Besides http(s), a target URL can use these schemes. Socket probes only run on a direct egress.
-#   icmp://1.1.1.1                                   ping (set `samples` for more echoes)
-#   tcp://host:443                                   TCP connect
-#   dns://8.8.8.8?name=example.com&type=A            one query over UDP
-#   dot://1.1.1.1?name=example.com&sni=cloudflare-dns.com   DNS over TLS
-#   stun://stun.l.google.com:19302                   STUN binding, reports the public UDP address
-#   quic://dns.adguard-dns.com:853                   QUIC version negotiation (UDP reachability)
+# Add services, or extend a built-in one by reusing its id.
 services: []
+#  # A new service. Targets can be bare URLs; the id and name come from the host.
+#  - id: internal
+#    name: Internal services
+#    category: Internal # tab the service appears under
+#    targets:
+#      - https://wiki.internal/
+#      - icmp://10.0.0.1
+#      - url: tcp://git.internal:22
+#        name: Git over SSH
+#      - id: registry
+#        name: Package mirror
+#        url: https://mirror.internal/healthz
+#        method: HEAD
+#        expectStatus: [200, 204]
+#      - id: dns
+#        name: Office resolver
+#        url: dns://10.0.0.53?name=wiki.internal
+#        samples: 10
+#
+#  # Extend built-in services: add targets, or replace one by reusing its id.
 #  - id: aws
 #    targets:
 #      - id: accelerate
 #        name: S3 Transfer Acceleration (my bucket)
 #        url: https://my-bucket.s3-accelerate.amazonaws.com/
-#        expectStatus: [403]
-#        check: reachability
+#        expectStatus: 403
+#        check: reachability # an error status by design proves the path, not the service
 #      - id: distribution
 #        name: CloudFront distribution
 #        url: https://d1234example.cloudfront.net/health
-#
-#  - id: github-actions
-#    targets:
-#      - id: blob-sa7
-#        name: Blob storage (sa7)
-#        url: https://productionresultssa7.blob.core.windows.net/
-#        expectStatus: [400]
-#        check: reachability
 #
 #  - id: vercel
 #    targets:
 #      - id: app
 #        name: Production deployment
 #        url: https://my-app.vercel.app/
+#        expectStatus: 2xx
 #      - id: asset
 #        name: Static asset (10 MB)
 #        url: https://my-app.vercel.app/speedtest/10mb.bin
 #        download:
 #          bytes: 10485760 # exact size; anything else counts as a failed transfer
-#          parallel: range # or `none` if the server ignores Range requests
-#
-#  - id: internal
-#    name: Internal services
-#    category: Internal # tab the service appears under
-#    description: Anything reachable over HTTP(S) or the schemes above.
-#    targets:
-#      - id: gateway
-#        name: Office gateway
-#        url: icmp://10.0.0.1
-#        samples: 20
-#      - id: wiki-site
-#        name: Wiki (any 2xx/3xx)
-#        url: https://wiki.internal/
-#        method: HEAD
-#        expectStatus: ['2xx', '3xx']
-#      - id: registry
-#        name: Package mirror
-#        url: https://mirror.internal/healthz
-#        method: HEAD
-#        expectStatus: [200, 204]
+#          parallel: range # or none if the server ignores Range requests

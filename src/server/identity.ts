@@ -340,6 +340,12 @@ const sources: Source[] = [
   },
 ]
 
+/** Family-pinned variants (`cloudflare-v4`, `cloudflare-v6`) are configured as one source. */
+const sourceGroup = (source: Source) => source.id.replace(/-v[46]$/, '')
+
+/** Source ids accepted by `modules.egress.excludeSources`. */
+export const identitySourceIds = [...new Set(sources.map(sourceGroup))]
+
 const parseTrace = (body: string): Json =>
   Object.fromEntries(
     body
@@ -562,27 +568,42 @@ const enrich = async (
  * quality of each distinct address and identify the DNS resolvers in use. Disagreements are the
  * point: rule-based proxies send different destinations out through different exits.
  */
+export interface IdentityOptions {
+  /** Source ids (see `identitySourceIds`) to skip. */
+  excludeSources: readonly string[]
+  /** Look up each exit address on proxycheck.io. */
+  reputation: boolean
+  /** Run the bash.ws DNS leak test. */
+  dnsLeakTest: boolean
+}
+
 export const collectIdentity = async (
   egress: ResolvedEgress,
+  options: IdentityOptions,
   signal: AbortSignal,
 ): Promise<IdentityReport> => {
   const started = performance.now()
   const base = { proxy: egress.rawProxy, timeoutMs: 8000, signal, userAgent: 'netprobe/0.1' }
+  const enabled = sources.filter((source) => !options.excludeSources.includes(sourceGroup(source)))
 
   const [observations, dnsWhoami, leak] = await Promise.all([
-    Promise.all(sources.map((source) => observe(source, base))),
+    Promise.all(enabled.map((source) => observe(source, base))),
     whoami(),
-    leakTest(base).catch((error: unknown) => ({
-      resolvers: [],
-      note: `Leak test failed: ${errorText(error)}`,
-    })),
+    options.dnsLeakTest
+      ? leakTest(base).catch((error: unknown) => ({
+          resolvers: [],
+          note: `Leak test failed: ${errorText(error)}`,
+        }))
+      : Promise.resolve(null),
   ])
 
   const addresses = [...new Set(observations.filter((o) => o.ok).map((o) => o.ip!))].slice(0, 8)
-  const lookups = await Promise.all(addresses.map((ip) => proxycheck(ip, base)))
+  const lookups = options.reputation
+    ? await Promise.all(addresses.map((ip) => proxycheck(ip, base)))
+    : []
 
   const notes = [...dnsWhoami.notes]
-  if (leak.resolvers.length === 0) {
+  if (leak && leak.resolvers.length === 0) {
     notes.push(
       `${leak.note ? `${leak.note.replace(/[.\s]+$/, '')}. ` : ''}The leak test saw no queries. A local proxy with fake-IP DNS answers lookups itself and only resolves names upstream when a connection is made; the TXT methods still identify the upstream resolver.`,
     )
@@ -595,7 +616,7 @@ export const collectIdentity = async (
     durationMs: Math.round(performance.now() - started),
     observations: [...observations, ...lookups],
     dns: {
-      resolvers: await enrich([...dnsWhoami.resolvers, ...leak.resolvers], base),
+      resolvers: await enrich([...dnsWhoami.resolvers, ...(leak?.resolvers ?? [])], base),
       notes,
     },
   }
