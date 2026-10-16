@@ -20,6 +20,11 @@ the network path of the machine Netprobe runs on — typically a CI runner or bu
   every run records the public IP it left from.
 - **What is this machine's network setup?** The Host page shows the device, OS, interfaces,
   default routes, DNS servers, proxy settings, and flags tunnels and fake-IP DNS.
+- **Who does the internet think this host is?** The Egress page asks 16 independent services
+  where the host's traffic comes from, groups their answers by network (so split routing through
+  a rule-based proxy is visible), looks up each exit address's type and reputation, and identifies
+  the DNS resolvers queries actually reach. A separate section checks the viewing browser's public
+  address and WebRTC candidates.
 
 ### Built-in targets
 
@@ -117,6 +122,8 @@ the page can trigger measurements but cannot make the server request arbitrary a
 - Proxy credentials and signed URL parameters are redacted before anything is stored, logged,
   or sent to the browser. Request logs contain only method, route, and status.
 - Cancelling a run kills its `curl` processes.
+- The Egress page sends requests to third-party IP information services (ipinfo.io, ip-api.com,
+  proxycheck.io, and others) only when you press Check; they see the host's public addresses.
 - There is no authentication. Expose it on a trusted network only.
 
 ## Development
