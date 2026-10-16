@@ -4,10 +4,11 @@ import fastifyStatic from '@fastify/static'
 import Fastify, { type FastifyInstance } from 'fastify'
 import { z } from 'zod'
 
-import type { AppConfig, RunEvent } from '../shared/types.ts'
+import type { AppConfig, IdentityReport, RunEvent } from '../shared/types.ts'
 import { publicTarget, type ResolvedConfig } from './config.ts'
 import type { Store } from './db.ts'
 import { collectHostInfo } from './host.ts'
+import { collectIdentity } from './identity.ts'
 import { RunConflictError, type Runner } from './runner.ts'
 
 const startRunSchema = z.object({
@@ -65,6 +66,24 @@ export const buildApp = async ({ config, store, runner, runtime, webRoot, logger
   app.get('/api/latest', async () => store.latestResults())
 
   app.get('/api/host', async () => collectHostInfo(runtime))
+
+  // Identity checks call many third-party services, so results are kept per egress until re-run.
+  const identities = new Map<string, IdentityReport>()
+
+  app.get('/api/identity', async (request) => {
+    const { egressId } = z.object({ egressId: z.string() }).parse(request.query)
+    return identities.get(egressId) ?? null
+  })
+
+  app.post('/api/identity', async (request, reply) => {
+    const parsed = z.object({ egressId: z.string() }).safeParse(request.body)
+    if (!parsed.success) return reply.code(400).send({ error: z.prettifyError(parsed.error) })
+    const egress = config.egress.find((e) => e.id === parsed.data.egressId)
+    if (!egress) return reply.code(400).send({ error: `Unknown egress "${parsed.data.egressId}".` })
+    const report = await collectIdentity(egress, AbortSignal.timeout(45_000))
+    identities.set(egress.id, report)
+    return report
+  })
 
   app.get('/api/runs', async (request) => {
     const { limit } = z

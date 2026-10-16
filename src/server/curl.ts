@@ -166,10 +166,20 @@ export const runCurl = (request: CurlRequest, signal: AbortSignal): Promise<Curl
   })
 
 /** Run curl and return its body as text. Used for small echo endpoints, never for targets. */
-export const fetchText = (
-  url: string,
-  options: { proxy: string | null; ipFamily: IpFamily; timeoutMs: number; signal: AbortSignal },
-): Promise<string> =>
+export interface FetchTextOptions {
+  proxy: string | null
+  ipFamily: IpFamily
+  timeoutMs: number
+  signal: AbortSignal
+  method?: 'GET' | 'POST'
+  /** Request body, sent on stdin so it never appears in the process list. */
+  body?: string
+  headers?: Record<string, string>
+  userAgent?: string
+}
+
+/** Run curl and return its body as text. Used for small API responses, never for targets. */
+export const fetchText = (url: string, options: FetchTextOptions): Promise<string> =>
   new Promise((resolve, reject) => {
     const args = [
       '-q',
@@ -183,6 +193,11 @@ export const fetchText = (
     if (options.ipFamily === 'ipv6') args.push('--ipv6')
     if (options.proxy) args.push('--proxy', options.proxy)
     else args.push('--noproxy', '*')
+    if (options.userAgent) args.push('--user-agent', options.userAgent)
+    for (const [name, value] of Object.entries(options.headers ?? {}))
+      args.push('--header', `${name}: ${value}`)
+    if (options.method === 'POST') args.push('--request', 'POST')
+    if (options.body !== undefined) args.push('--data-binary', '@-')
     args.push('--', url)
     const child = spawn('curl', args, {
       env: curlEnv(),
@@ -198,6 +213,7 @@ export const fetchText = (
       if (code === 0) resolve(stdout)
       else reject(new Error(stderr.trim() || `curl exited with ${code}`))
     })
+    child.stdin.end(options.body ?? '')
   })
 
 export const curlVersion = (): Promise<string> =>

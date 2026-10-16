@@ -334,3 +334,59 @@ export interface MacNetworkInfo {
     enabled: boolean
   }[]
 }
+
+/** A yes/no signal from a source; null when the source does not report it. */
+export type Signal = boolean | null
+
+/**
+ * What one source says about the address traffic leaves from. `lookup` sources are queried about
+ * an address found elsewhere instead of observing the caller themselves.
+ */
+export interface IpObservation {
+  sourceId: string
+  source: string
+  /** IP family the request was pinned to (`auto` lets the system choose). */
+  family: 'auto' | 'ipv4' | 'ipv6'
+  lookup: boolean
+  ok: boolean
+  error: string | null
+  latencyMs: number | null
+  ip: string | null
+  asn: number | null
+  organization: string | null
+  isp: string | null
+  country: string | null
+  countryCode: string | null
+  region: string | null
+  city: string | null
+  /** Network type as the source classifies it: isp, hosting, business, mobile, education, … */
+  networkType: string | null
+  flags: { proxy: Signal; vpn: Signal; tor: Signal; hosting: Signal; mobile: Signal }
+  /** Risk or fraud score, 0–100, where the source provides one. */
+  risk: number | null
+}
+
+export interface DnsResolverObservation {
+  /** How the resolver was identified (a TXT whoami record, or a leak-test service). */
+  method: string
+  ip: string
+  asn: number | null
+  organization: string | null
+  country: string | null
+  countryCode: string | null
+  city: string | null
+  /** Extra detail, e.g. the EDNS client subnet the resolver forwards. */
+  note: string | null
+}
+
+export interface IdentityReport {
+  egress: EgressInfo
+  collectedAt: string
+  durationMs: number
+  observations: IpObservation[]
+  dns: {
+    resolvers: DnsResolverObservation[]
+    /** Problems running a method, e.g. a leak test that saw no queries under fake-IP DNS. */
+    notes: string[]
+  }
+}

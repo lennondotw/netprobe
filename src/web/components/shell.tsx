@@ -11,6 +11,16 @@ const navItems = [
     icon: <path d='M2.5 13.5h11M4 11V7m4 4V3.5m4 7.5V6' />,
   },
   {
+    href: '/egress',
+    label: 'Egress',
+    icon: (
+      <>
+        <circle cx='8' cy='8' r='5.75' />
+        <path d='M2.25 8h11.5M8 2.25c1.6 1.7 2.4 3.6 2.4 5.75S9.6 12.05 8 13.75C6.4 12.05 5.6 10.15 5.6 8S6.4 3.95 8 2.25Z' />
+      </>
+    ),
+  },
+  {
     href: '/host',
     label: 'Host',
     icon: (

@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client'
 import { AppShell } from './components/shell.tsx'
 import { TooltipHost } from './components/ui/tooltip.tsx'
 import { usePathname } from './lib/router.tsx'
+import { EgressPage } from './pages/egress.tsx'
 import { HistoryPage } from './pages/history.tsx'
 import { HostPage } from './pages/host.tsx'
 import { OverviewPage } from './pages/overview.tsx'
@@ -21,6 +22,7 @@ const Routes = () => {
   if (run) return <RunPage id={run[1]!} key={run[1]} />
   if (pathname === '/runs') return <HistoryPage />
   if (pathname === '/host') return <HostPage />
+  if (pathname === '/egress') return <EgressPage />
   return <OverviewPage />
 }
 
