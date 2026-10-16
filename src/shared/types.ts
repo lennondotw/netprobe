@@ -171,7 +171,8 @@ export interface TargetInfo {
   expectStatus: number[]
   /** Reachability-only targets answer with an error status by design (e.g. 401 without auth). */
   check: 'reachability' | 'response'
-  download: { bytes: number | null; maxBytes: number } | null
+  /** `parallel`: whether a multi-connection (range split) measurement follows the single one. */
+  download: { bytes: number | null; maxBytes: number; parallel: boolean } | null
   note: string | null
 }
 

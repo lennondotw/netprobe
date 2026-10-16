@@ -1,0 +1,270 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
+
+import type { AppConfig, IpFamily, LatestResult, RunMode } from '../../shared/types.ts'
+import { type ResultEntry, ServiceResults } from '../components/results.tsx'
+import { Callout } from '../components/ui/callout.tsx'
+import { buttonClass } from '../components/ui/controls.tsx'
+import { Segmented, Select } from '../components/ui/inputs.tsx'
+import { MetaList, PageHeader, Toolbar } from '../components/ui/page-header.tsx'
+import { ListSkeleton } from '../components/ui/skeleton.tsx'
+import { cancelRun, queryKeys, startRun, useConfig, useLatest } from '../lib/api.ts'
+import { formatBytes, formatRelative } from '../lib/format.ts'
+import { useRunStream } from '../lib/use-run-stream.ts'
+
+const modes = [
+  { value: 'quick', label: 'Quick' },
+  { value: 'download', label: 'Download' },
+] as const
+
+const ipFamilies = [
+  { value: 'auto', label: 'Auto' },
+  { value: 'ipv4', label: 'IPv4' },
+  { value: 'ipv6', label: 'IPv6' },
+] as const
+
+export const OverviewPage = () => {
+  const config = useConfig()
+  const latest = useLatest()
+
+  if (config.error) {
+    return (
+      <>
+        <PageHeader title='Overview' />
+        <Callout role='alert' title='Could not load configuration' tone='danger'>
+          {config.error.message}
+        </Callout>
+      </>
+    )
+  }
+  if (!config.data) {
+    return (
+      <>
+        <PageHeader title='Overview' />
+        <ListSkeleton />
+      </>
+    )
+  }
+  return <Overview config={config.data} latest={latest.data ?? []} />
+}
+
+const Overview = ({ config, latest }: { config: AppConfig; latest: readonly LatestResult[] }) => {
+  const queryClient = useQueryClient()
+  const [mode, setMode] = useState<RunMode>('quick')
+  const [egressId, setEgressId] = useState(config.defaults.egressId)
+  const [ipFamily, setIpFamily] = useState<IpFamily>(config.defaults.ipFamily)
+  const [repeats, setRepeats] = useState(String(config.defaults.repeats))
+  // Store what the user turned off, so services added to the config later start selected.
+  const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set())
+  const [startedRunId, setStartedRunId] = useState<string | null>(null)
+
+  const followedRunId = startedRunId ?? config.activeRunId
+  const live = useRunStream(followedRunId)
+  const running = live
+    ? live.status === 'running'
+    : followedRunId !== null && config.activeRunId === followedRunId
+
+  const start = useMutation({
+    mutationFn: startRun,
+    onSuccess: (run) => {
+      setStartedRunId(run.id)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.config })
+    },
+  })
+  const cancel = useMutation({ mutationFn: cancelRun })
+
+  const selected = useMemo(
+    () => new Set(config.services.map((s) => s.id).filter((id) => !excluded.has(id))),
+    [config.services, excluded],
+  )
+  const selectedTargets = config.services
+    .filter((s) => selected.has(s.id))
+    .flatMap((s) => s.targets)
+    .filter((t) => (mode === 'download' ? t.download : !t.download))
+
+  const results = useMemo(() => {
+    const map = new Map<string, ResultEntry>()
+    for (const item of latest)
+      map.set(item.result.targetId, { result: item.result, at: item.createdAt })
+    if (live) {
+      for (const result of live.results) {
+        map.set(result.targetId, {
+          result,
+          at: live.status === 'running' ? undefined : live.createdAt,
+        })
+      }
+    }
+    return map
+  }, [latest, live])
+
+  const lastRunAt = latest.reduce<string | null>(
+    (max, item) => (!max || item.createdAt > max ? item.createdAt : max),
+    null,
+  )
+  const progress =
+    live && live.status === 'running'
+      ? { done: live.results.filter((r) => r.status === 'done').length, total: live.results.length }
+      : null
+
+  const estimate = selectedTargets.reduce(
+    (acc, t) => {
+      if (!t.download) return acc
+      if (t.download.bytes == null) return { ...acc, unknown: acc.unknown + 1 }
+      return { ...acc, bytes: acc.bytes + t.download.bytes * (t.download.parallel ? 2 : 1) }
+    },
+    { bytes: 0, unknown: 0 },
+  )
+
+  const egressOptions = config.egress.map((e) => ({
+    value: e.id,
+    label: e.name,
+    detail: e.proxy ?? 'No proxy',
+  }))
+
+  return (
+    <>
+      <PageHeader
+        actions={
+          <>
+            <Segmented
+              disabled={running}
+              label='Mode'
+              onChange={setMode}
+              options={modes}
+              value={mode}
+            />
+            <Select
+              disabled={running}
+              label='Egress'
+              onChange={setEgressId}
+              options={egressOptions}
+              value={egressId}
+            />
+            <Select
+              disabled={running}
+              label='IP'
+              onChange={setIpFamily}
+              options={ipFamilies}
+              value={ipFamily}
+            />
+            {mode === 'quick' && (
+              <Select
+                disabled={running}
+                label='Repeats'
+                onChange={setRepeats}
+                options={['1', '3', '5', '10', '20'].map((v) => ({ value: v, label: v }))}
+                value={repeats}
+              />
+            )}
+            {running && followedRunId ? (
+              <button
+                className={buttonClass.secondary}
+                disabled={cancel.isPending}
+                onClick={() => cancel.mutate(followedRunId)}
+                type='button'
+              >
+                Cancel
+              </button>
+            ) : (
+              <button
+                className={buttonClass.primary}
+                disabled={selectedTargets.length === 0 || start.isPending}
+                onClick={() =>
+                  start.mutate({
+                    mode,
+                    egressId,
+                    ipFamily,
+                    repeats: Number(repeats),
+                    targetIds: selectedTargets.map((t) => t.id),
+                  })
+                }
+                type='button'
+              >
+                <svg aria-hidden='true' className='size-3 fill-current' viewBox='0 0 12 12'>
+                  <path d='M3 2.2v7.6a.5.5 0 0 0 .76.43l6.2-3.8a.5.5 0 0 0 0-.86l-6.2-3.8A.5.5 0 0 0 3 2.2Z' />
+                </svg>
+                Run test
+              </button>
+            )}
+          </>
+        }
+        title='Overview'
+      />
+      <div className='relative'>
+        <Toolbar>
+          <MetaList>
+            <span>
+              {selectedTargets.length} {selectedTargets.length === 1 ? 'target' : 'targets'}
+            </span>
+            {mode === 'download' && (
+              <span>
+                ≈ {formatBytes(estimate.bytes)} traffic
+                {estimate.unknown > 0 && ` + ${estimate.unknown} of unknown size`}
+              </span>
+            )}
+            {live?.egress.publicIp && (
+              <span>
+                Egress IP <span className='font-mono text-secondary'>{live.egress.publicIp}</span>
+              </span>
+            )}
+            {progress ? (
+              <span className='text-accent-text'>
+                Running {progress.done}/{progress.total}
+              </span>
+            ) : (
+              lastRunAt && <span>Last measured {formatRelative(lastRunAt)}</span>
+            )}
+          </MetaList>
+        </Toolbar>
+        {progress && (
+          <div aria-hidden='true' className='absolute inset-x-0 bottom-0 h-px overflow-hidden'>
+            <div
+              className='h-full bg-accent transition-[width] duration-300 ease-out'
+              style={{ width: `${(progress.done / Math.max(progress.total, 1)) * 100}%` }}
+            />
+          </div>
+        )}
+      </div>
+
+      {config.runtime.environment === 'container' && (
+        <Callout title='Measured from inside a container' tone='warning'>
+          Docker on macOS and Windows routes traffic through an extra VM and NAT layer, and
+          host-level proxies or TUN interfaces may not apply. Compare with a run on the host before
+          drawing conclusions about CI jobs.
+        </Callout>
+      )}
+      {start.error && (
+        <Callout role='alert' title='Could not start the run' tone='danger'>
+          {start.error.message}
+        </Callout>
+      )}
+      {live?.status === 'failed' && live.error && (
+        <Callout role='alert' title='The run failed' tone='danger'>
+          {live.error}
+        </Callout>
+      )}
+      {live?.egress.publicIpError && (
+        <Callout title='Egress IP unknown' tone='warning'>
+          {live.egress.publicIpError}
+        </Callout>
+      )}
+
+      <ServiceResults
+        mode={mode}
+        results={results}
+        selection={{
+          selected,
+          disabled: running,
+          toggle: (serviceId, checked) =>
+            setExcluded((current) => {
+              const next = new Set(current)
+              if (checked) next.delete(serviceId)
+              else next.add(serviceId)
+              return next
+            }),
+        }}
+        services={config.services}
+      />
+    </>
+  )
+}

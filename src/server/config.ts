@@ -117,7 +117,13 @@ const resolveTarget = (
   check: target.check,
   // Downloads usually sit behind a redirect to a CDN; probes measure the first hop only.
   followRedirects: target.followRedirects ?? Boolean(target.download),
-  download: target.download ? { bytes: target.download.bytes ?? null, maxBytes } : null,
+  download: target.download
+    ? {
+        bytes: target.download.bytes ?? null,
+        maxBytes,
+        parallel: target.download.parallel === 'range',
+      }
+    : null,
   parallel: target.download?.parallel ?? 'none',
   note: target.note ?? null,
 })

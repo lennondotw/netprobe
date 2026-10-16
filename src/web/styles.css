@@ -1,0 +1,215 @@
+@import 'tailwindcss';
+
+/*
+ * Design tokens. Components only reference the semantic names exposed through
+ * `@theme inline` below (bg-surface, text-muted, border-line, …), so a theme is
+ * nothing more than a different set of values for these variables.
+ */
+:root {
+  color-scheme: light;
+
+  --canvas: #fbfbfc;
+  --sidebar: #f4f4f6;
+  --surface: #ffffff;
+  --surface-subtle: #f7f7f8;
+  --hover: #f0f0f2;
+  --active: #e9e9ec;
+
+  --line: #e8e8eb;
+  --line-subtle: #f0f0f2;
+  --line-strong: #dcdce0;
+
+  --foreground: #1c1d21;
+  --secondary: #3c3e45;
+  --muted: #6c6f78;
+  --faint: #9c9ea6;
+
+  --accent: #5e6ad2;
+  --accent-hover: #4f5bc4;
+  --accent-text: #4f5bc4;
+  --accent-text-hover: #3f4ab0;
+  --accent-soft: #eef0fc;
+  --on-accent: #ffffff;
+
+  --success: #2e8a5b;
+  --info: #4a63d6;
+  --warning: #b8741a;
+  --danger: #d24b4b;
+  --neutral: #9c9ea6;
+
+  --warning-soft: #fdf6ea;
+  --danger-soft: #fdf0f0;
+
+  --shadow-raised: 0 1px 2px rgb(16 17 20 / 6%);
+  --shadow-popup: 0 12px 32px -8px rgb(16 17 20 / 18%), 0 2px 6px rgb(16 17 20 / 6%);
+
+  /* Request phases, in waterfall order. */
+  --phase-dns: #b7b9c2;
+  --phase-tcp: #7d8ce8;
+  --phase-tls: #5e6ad2;
+  --phase-ttfb: #d9a44f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --canvas: #101113;
+    --sidebar: #0c0d0e;
+    --surface: #16171a;
+    --surface-subtle: #131416;
+    --hover: #1d1e22;
+    --active: #25272c;
+
+    --line: #25272c;
+    --line-subtle: #1d1e22;
+    --line-strong: #30323a;
+
+    --foreground: #eeeff1;
+    --secondary: #c9cad0;
+    --muted: #8b8e98;
+    --faint: #62656e;
+
+    --accent: #5a64cc;
+    --accent-hover: #4e58bd;
+    --accent-text: #8a93f0;
+    --accent-text-hover: #a4abf7;
+    --accent-soft: #1e2138;
+    --on-accent: #ffffff;
+
+    --success: #4cb782;
+    --info: #7b8cf2;
+    --warning: #e0a44a;
+    --danger: #eb6b6b;
+    --neutral: #6d707a;
+
+    --warning-soft: #241d12;
+    --danger-soft: #261515;
+
+    --shadow-raised: 0 1px 2px rgb(0 0 0 / 40%);
+    --shadow-popup: 0 12px 32px -8px rgb(0 0 0 / 60%), 0 0 0 1px rgb(255 255 255 / 4%);
+
+    --phase-dns: #4a4d57;
+    --phase-tcp: #5d6bc4;
+    --phase-tls: #8a93f0;
+    --phase-ttfb: #c6913f;
+  }
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-sidebar: var(--sidebar);
+  --color-surface: var(--surface);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-hover: var(--hover);
+  --color-active: var(--active);
+
+  --color-line: var(--line);
+  --color-line-subtle: var(--line-subtle);
+  --color-line-strong: var(--line-strong);
+
+  --color-foreground: var(--foreground);
+  --color-secondary: var(--secondary);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-text: var(--accent-text);
+  --color-accent-text-hover: var(--accent-text-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+
+  --color-success: var(--success);
+  --color-info: var(--info);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-neutral: var(--neutral);
+
+  --color-warning-soft: var(--warning-soft);
+  --color-danger-soft: var(--danger-soft);
+
+  --shadow-raised: var(--shadow-raised);
+  --shadow-popup: var(--shadow-popup);
+
+  --color-phase-dns: var(--phase-dns);
+  --color-phase-tcp: var(--phase-tcp);
+  --color-phase-tls: var(--phase-tls);
+  --color-phase-ttfb: var(--phase-ttfb);
+
+  --font-sans:
+    'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+/*
+ * Snappy interaction feedback: state changes land instantly when the pointer
+ * arrives (or the control is pressed) and ease out quickly when it leaves.
+ * The transition lives on the resting state, and hover/active zero it out.
+ */
+@utility snap {
+  transition-property: color, background-color, border-color, box-shadow, opacity;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  transition-duration: 140ms;
+
+  &:hover,
+  &:active {
+    transition-duration: 0ms;
+  }
+}
+
+/* For children that react to a `group` hover: instant in, fast out. */
+@utility snap-group {
+  transition-property: color, background-color, border-color, opacity;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  transition-duration: 140ms;
+
+  :where(.group):hover & {
+    transition-duration: 0ms;
+  }
+}
+
+@layer base {
+  html {
+    background: var(--canvas);
+  }
+
+  body {
+    min-height: 100vh;
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv11', 'ss01';
+    margin: 0;
+    background: var(--canvas);
+    color: var(--foreground);
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Links inherit their colour; components opt into accent colour explicitly. */
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 28%, transparent);
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0ms !important;
+  }
+}
