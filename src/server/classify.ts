@@ -3,6 +3,7 @@ import type {
   ErrorKind,
   Outcome,
   Phase,
+  StatusMatcher,
   TargetSummary,
   Throughput,
 } from '../shared/types.ts'
@@ -71,7 +72,7 @@ export const classifyExit = (sample: CurlSample): { kind: ErrorKind; phase: Phas
 interface AttemptContext {
   seq: number
   startedAt: string
-  expectStatus: readonly number[]
+  expectStatus: readonly StatusMatcher[]
   /** For downloads: the body must be exactly this many bytes to count as transferred. */
   expectBytes?: number | null
   /** For downloads: success requires the body to have arrived in full. */
@@ -104,6 +105,7 @@ export const toAttempt = (sample: CurlSample, context: AttemptContext): Attempt 
     totalMs: ms(sample.timeTotal),
     bytes: sample.sizeDownload,
     effectiveUrl: sample.urlEffective ? redactUrl(sample.urlEffective) : null,
+    detail: null,
   }
 
   if (sample.aborted) {
@@ -129,7 +131,7 @@ export const toAttempt = (sample: CurlSample, context: AttemptContext): Attempt 
     }
   }
 
-  if (!context.expectStatus.includes(sample.httpCode)) {
+  if (!statusMatches(context.expectStatus, sample.httpCode)) {
     return {
       ...base,
       outcome: 'reachable',
@@ -153,6 +155,22 @@ export const toAttempt = (sample: CurlSample, context: AttemptContext): Attempt 
   }
 
   return { ...base, outcome: 'expected', phase: null, errorKind: null, errorMessage: null }
+}
+
+export const statusMatches = (matchers: readonly StatusMatcher[], code: number) =>
+  matchers.some((m) =>
+    typeof m === 'number' ? m === code : Math.floor(code / 100) === Number(m[0]),
+  )
+
+/**
+ * Jitter as the mean absolute difference between consecutive round trips (the RFC 3550 idea,
+ * without smoothing). Order matters, so this uses attempts in the order they ran.
+ */
+export const jitterOf = (samples: readonly number[]): number | null => {
+  if (samples.length < 2) return null
+  let sum = 0
+  for (let i = 1; i < samples.length; i++) sum += Math.abs(samples[i]! - samples[i - 1]!)
+  return Math.round((sum / (samples.length - 1)) * 10) / 10
 }
 
 const outcomeRank: Record<Outcome, number> = {
@@ -211,8 +229,10 @@ export const summarize = (attempts: readonly Attempt[]): TargetSummary => {
     },
     min: { total: totals.length ? Math.min(...totals) : null },
     max: { total: totals.length ? Math.max(...totals) : null },
+    jitter: jitterOf(totals),
     topError,
     remoteIps: [...new Set(counted.map((a) => a.remoteIp).filter((ip): ip is string => !!ip))],
+    details: [...new Set(counted.map((a) => a.detail).filter((d): d is string => !!d))],
   }
 }
 

@@ -3,20 +3,43 @@ import { existsSync, readFileSync } from 'node:fs'
 import { parse as parseYaml } from 'yaml'
 import { z } from 'zod'
 
-import type { EgressInfo, IpFamily, ServiceInfo, TargetInfo } from '../shared/types.ts'
+import type { EgressInfo, IpFamily, ProbeKind, ServiceInfo, TargetInfo } from '../shared/types.ts'
 import { presets } from './presets.ts'
 import { redactProxy, redactUrl } from './redact.ts'
 
 const id = z.string().regex(/^[a-z0-9][a-z0-9-]*$/, 'lowercase letters, digits, and dashes')
 
+const schemeKinds: Record<string, ProbeKind> = {
+  'http:': 'http',
+  'https:': 'http',
+  'tcp:': 'tcp',
+  'dns:': 'dns',
+  'dot:': 'dot',
+  'stun:': 'stun',
+  'quic:': 'quic',
+  'icmp:': 'icmp',
+}
+
+export const kindOf = (url: string): ProbeKind => schemeKinds[new URL(url).protocol] ?? 'http'
+
+const statusMatcher = z.union([
+  z.number().int().min(100).max(599),
+  z.enum(['2xx', '3xx', '4xx', '5xx']),
+])
+
 const targetSchema = z.object({
   id,
   name: z.string().min(1),
-  url: z.url({ protocol: /^https?$/ }),
+  /** http(s), tcp, dns, dot, stun, quic, or icmp — see `ProbeKind` for each URL's shape. */
+  url: z.url({ protocol: /^(https?|tcp|dns|dot|stun|quic|icmp)$/ }),
   method: z.enum(['GET', 'HEAD']).default('GET'),
-  expectStatus: z.array(z.number().int().min(100).max(599)).min(1).optional(),
+  expectStatus: z.array(statusMatcher).min(1).optional(),
   check: z.enum(['reachability', 'response']).default('response'),
   followRedirects: z.boolean().optional(),
+  /** Extra request headers (HTTP only). */
+  headers: z.record(z.string(), z.string()).optional(),
+  /** Minimum attempts per run, e.g. more samples for latency and jitter probes. */
+  samples: z.number().int().min(1).max(50).optional(),
   note: z.string().optional(),
   download: z
     .object({
@@ -32,6 +55,7 @@ const serviceSchema = z.object({
   id,
   name: z.string().min(1).optional(),
   description: z.string().optional(),
+  category: z.string().optional(),
   targets: z.array(targetSchema).default([]),
 })
 
@@ -49,7 +73,7 @@ const configSchema = z.object({
       repeats: z.number().int().min(1).max(20).default(5),
       connectTimeoutMs: z.number().int().min(500).max(60_000).default(5_000),
       timeoutMs: z.number().int().min(1_000).max(120_000).default(15_000),
-      concurrency: z.number().int().min(1).max(16).default(4),
+      concurrency: z.number().int().min(1).max(32).default(8),
     })
     .prefault({}),
   download: z
@@ -84,6 +108,8 @@ export interface ResolvedTarget extends TargetInfo {
   rawUrl: string
   followRedirects: boolean
   parallel: 'range' | 'none'
+  headers: Record<string, string>
+  samples: number
 }
 
 export interface ResolvedEgress extends EgressInfo {
@@ -110,8 +136,11 @@ const resolveTarget = (
   id: `${serviceId}.${target.id}`,
   serviceId,
   name: target.name,
+  kind: kindOf(target.url),
   url: redactUrl(target.url),
   rawUrl: target.url,
+  headers: target.headers ?? {},
+  samples: target.samples ?? 1,
   method: target.method,
   expectStatus: target.expectStatus ?? [200],
   check: target.check,
@@ -134,7 +163,10 @@ const resolveTarget = (
  */
 export const resolveConfig = (input: unknown): ResolvedConfig => {
   const config = configSchema.parse(input ?? {})
-  const merged = new Map<string, { name: string; description: string; targets: TargetConfig[] }>()
+  const merged = new Map<
+    string,
+    { name: string; description: string; category: string; targets: TargetConfig[] }
+  >()
 
   for (const preset of presets) {
     if (config.presets.exclude.includes(preset.id)) continue
@@ -142,6 +174,7 @@ export const resolveConfig = (input: unknown): ResolvedConfig => {
     merged.set(parsed.id, {
       name: parsed.name ?? parsed.id,
       description: parsed.description ?? '',
+      category: parsed.category ?? 'Custom',
       targets: parsed.targets,
     })
   }
@@ -151,12 +184,14 @@ export const resolveConfig = (input: unknown): ResolvedConfig => {
     if (existing) {
       existing.name = service.name ?? existing.name
       existing.description = service.description ?? existing.description
+      existing.category = service.category ?? existing.category
       const ids = new Set(service.targets.map((target) => target.id))
       existing.targets = [...existing.targets.filter((t) => !ids.has(t.id)), ...service.targets]
     } else {
       merged.set(service.id, {
         name: service.name ?? service.id,
         description: service.description ?? '',
+        category: service.category ?? 'Custom',
         targets: service.targets,
       })
     }
@@ -166,6 +201,7 @@ export const resolveConfig = (input: unknown): ResolvedConfig => {
     id: serviceId,
     name: service.name,
     description: service.description,
+    category: service.category,
     targets: service.targets.map((t) => resolveTarget(serviceId, t, config.download.maxBytes)),
   }))
 
@@ -210,5 +246,7 @@ export const publicTarget = ({
   rawUrl: _raw,
   followRedirects: _f,
   parallel: _p,
+  headers: _h,
+  samples: _s,
   ...target
 }: ResolvedTarget): TargetInfo => target

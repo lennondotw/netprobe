@@ -67,6 +67,7 @@ const attempt = (overrides: Partial<Attempt>): Attempt => ({
   totalMs: 61,
   bytes: 0,
   effectiveUrl: null,
+  detail: null,
   ...overrides,
 })
 

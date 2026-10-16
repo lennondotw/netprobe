@@ -203,6 +203,7 @@ export class Runner {
       proxy: egress.rawProxy,
       followRedirects: target.followRedirects,
       userAgent,
+      headers: target.headers,
     }
   }
 

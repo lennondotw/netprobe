@@ -22,8 +22,26 @@ export type ErrorKind =
   | 'http_status'
   | 'size_mismatch'
   | 'range_unsupported'
+  | 'packet_loss'
+  | 'bad_response'
   | 'cancelled'
   | 'other'
+
+/**
+ * How a target is measured, taken from its URL scheme:
+ * - `http`: `http(s)://` through curl, with per-phase timings and an expected status.
+ * - `tcp`: `tcp://host:port`, a bare TCP connect.
+ * - `dns`: `dns://server[:port]?name=…&type=A|AAAA`, one query over UDP.
+ * - `dot`: `dot://server[:port]?name=…&sni=…`, the same query over TLS (DNS over TLS).
+ * - `stun`: `stun://host[:port]`, a STUN binding request that reports the public mapped address.
+ * - `quic`: `quic://host[:port]`, a QUIC version-negotiation exchange: proves UDP/QUIC reachability
+ *   and measures round-trip time without a full handshake.
+ * - `icmp`: `icmp://host`, echo requests through the system `ping`.
+ */
+export type ProbeKind = 'http' | 'tcp' | 'dns' | 'dot' | 'stun' | 'quic' | 'icmp'
+
+/** An exact status code, or any code in a class. */
+export type StatusMatcher = number | '2xx' | '3xx' | '4xx' | '5xx'
 
 /**
  * How far a request got. Each level implies the ones before it:
@@ -60,6 +78,8 @@ export interface Attempt {
   bytes: number
   /** Effective URL after redirects, with credential-bearing query values redacted. */
   effectiveUrl: string | null
+  /** Probe-specific result worth showing, e.g. a STUN mapped address or a DNS answer. */
+  detail: string | null
 }
 
 export interface Throughput {
@@ -102,9 +122,13 @@ export interface TargetSummary {
   }
   min: { total: number | null }
   max: { total: number | null }
+  /** Mean absolute difference between consecutive successful round trips, in ms. */
+  jitter: number | null
   /** Most common failure among attempts, if any failed. */
   topError: { kind: ErrorKind; phase: Phase | null; count: number } | null
   remoteIps: string[]
+  /** Distinct probe details across attempts (e.g. every STUN mapped address seen). */
+  details: string[]
 }
 
 export interface TargetResult {
@@ -166,9 +190,10 @@ export interface TargetInfo {
   id: string
   serviceId: string
   name: string
+  kind: ProbeKind
   url: string
   method: 'GET' | 'HEAD'
-  expectStatus: number[]
+  expectStatus: StatusMatcher[]
   /** Reachability-only targets answer with an error status by design (e.g. 401 without auth). */
   check: 'reachability' | 'response'
   /** `parallel`: whether a multi-connection (range split) measurement follows the single one. */
@@ -180,6 +205,8 @@ export interface ServiceInfo {
   id: string
   name: string
   description: string
+  /** Display grouping for services, e.g. "Network" or "Developer". */
+  category: string
   targets: TargetInfo[]
 }
 

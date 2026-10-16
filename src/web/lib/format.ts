@@ -80,6 +80,8 @@ export const errorLabel: Record<ErrorKind, string> = {
   http_status: 'Unexpected status',
   size_mismatch: 'Size mismatch',
   range_unsupported: 'No range support',
+  packet_loss: 'Packet loss',
+  bad_response: 'Bad response',
   cancelled: 'Cancelled',
   other: 'Error',
 }

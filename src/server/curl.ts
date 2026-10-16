@@ -61,6 +61,7 @@ export interface CurlRequest {
   /** Abort when the response declares (or reaches) more bytes than this. */
   maxFilesize?: number
   userAgent: string
+  headers?: Record<string, string>
 }
 
 const proxyEnvKeys = /^(https?|all|no|ftp)_proxy$/i
@@ -71,6 +72,8 @@ export const buildCurlArgs = (request: CurlRequest): string[] => {
   args.push('--connect-timeout', String(request.connectTimeoutMs / 1000))
   args.push('--max-time', String(request.maxTimeMs / 1000))
   args.push('--user-agent', request.userAgent)
+  for (const [name, value] of Object.entries(request.headers ?? {}))
+    args.push('--header', `${name}: ${value}`)
   if (request.method === 'HEAD') args.push('--head')
   if (request.ipFamily === 'ipv4') args.push('--ipv4')
   if (request.ipFamily === 'ipv6') args.push('--ipv6')
