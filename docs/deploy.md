@@ -76,6 +76,10 @@ exits:
     dns: 192.168.1.240 # optional: resolve names through it too
 ```
 
+If your Docker client injects proxy variables into containers (`proxies` in
+`~/.docker/config.json`), the server unsets them at start; to keep them out of the container's
+configuration too, set each one to an empty value under `environment` in the override.
+
 Keep the bridge as the default network so the page stays reachable and the `direct` exit keeps
 the host's route. Bound exits are IPv4 only. Without the policy routing (host networking, macOS,
 or a missing capability), curl and ping still bind to the interface, but socket probes report
