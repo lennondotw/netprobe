@@ -186,6 +186,26 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  /*
+   * Behave like a native app: UI chrome is not text, so it is not selectable, and controls keep
+   * the arrow cursor. Long-form content (URLs, error output, notes) opts back in with `select-text`.
+   */
+  body {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  a,
+  button,
+  label,
+  summary,
+  [role='button'],
+  [role='checkbox'],
+  [role='combobox'],
+  [role='option'] {
+    cursor: default;
+  }
+
   /* Links inherit their colour; components opt into accent colour explicitly. */
   a {
     color: inherit;

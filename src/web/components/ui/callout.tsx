@@ -29,7 +29,9 @@ export const Callout = ({ children, label, role, title, tone, trailing }: Callou
     </span>
     <div className='min-w-0 flex-1'>
       <div className='text-[12.5px] font-medium text-foreground'>{title}</div>
-      {children && <div className='mt-0.5 text-[12px] leading-5 text-muted'>{children}</div>}
+      {children && (
+        <div className='mt-0.5 text-[12px] leading-5 text-muted select-text'>{children}</div>
+      )}
     </div>
     {trailing}
   </aside>

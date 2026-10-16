@@ -103,7 +103,7 @@ export interface StatusView {
 export const statusOf = (target: TargetInfo, result: TargetResult | undefined): StatusView => {
   if (!result) return { label: 'Not run', tone: 'neutral' }
   if (result.status === 'pending') return { label: 'Queued', tone: 'neutral' }
-  if (result.status === 'running' && !result.outcome) return { label: 'Running', tone: 'info' }
+  if (result.status === 'running') return { label: 'Running', tone: 'info' }
   if (result.status === 'cancelled' && !result.outcome)
     return { label: 'Cancelled', tone: 'neutral' }
 

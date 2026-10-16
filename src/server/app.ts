@@ -138,7 +138,16 @@ export const buildApp = async ({ config, store, runner, runtime, webRoot, logger
   })
 
   if (existsSync(webRoot)) {
-    await app.register(fastifyStatic, { root: webRoot, wildcard: false })
+    await app.register(fastifyStatic, {
+      root: webRoot,
+      // Hashed bundles never change; the HTML shell must always be revalidated.
+      setHeaders: (reply, path) => {
+        reply.header(
+          'cache-control',
+          path.includes('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache',
+        )
+      },
+    })
     // Client-side routes fall back to the SPA shell; unknown API paths stay 404.
     app.setNotFoundHandler((request, reply) => {
       if (request.method === 'GET' && !request.url.startsWith('/api/'))

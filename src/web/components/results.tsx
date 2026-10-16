@@ -17,10 +17,10 @@ import {
   statusOf,
 } from '../lib/format.ts'
 import { Badge, StatusDot, type Tone } from './ui/badge.tsx'
-import { DataTable, type DataTableColumn } from './ui/data-table.tsx'
+import { DataTable, type DataTableColumn, type DataTableGroup } from './ui/data-table.tsx'
 import { DetailDialog, DetailSection, useDetailDialog } from './ui/dialog.tsx'
 import { Checkbox, Tooltip } from './ui/inputs.tsx'
-import { GroupHeader, Row, SectionLabel } from './ui/list.tsx'
+import { Row, SectionLabel } from './ui/list.tsx'
 
 export interface ResultEntry {
   result: TargetResult
@@ -106,7 +106,7 @@ const ErrorCell = ({ result }: { result: TargetResult | undefined }) => {
   const count = error.count > 1 ? ` ×${error.count}` : ''
   return sample ? (
     <Tooltip content={<span className='font-mono text-[11.5px]'>{sample}</span>}>
-      <span className='cursor-default text-secondary'>
+      <span className='text-secondary'>
         {label}
         <span className='text-faint'>{count}</span>
       </span>
@@ -132,7 +132,7 @@ const RateCell = ({ download }: { download: DownloadResult | undefined }) => {
     <Tooltip
       content={`${rate.mbs} · ${formatBytes(download.throughput.bytes)} in ${download.throughput.transferSeconds}s`}
     >
-      <span className='cursor-default'>{rate.mbps}</span>
+      <span>{rate.mbps}</span>
     </Tooltip>
   )
 }
@@ -147,11 +147,12 @@ const columnsFor = (mode: RunMode, scale: number): DataTableColumn<Row>[] => {
     id: 'target',
     header: 'Target',
     primary: true,
-    className: 'w-[32%]',
     cell: ({ target }) => (
       <span className='flex min-w-0 items-baseline gap-2'>
         <span className='font-medium text-foreground'>{target.name}</span>
-        <span className='truncate font-mono text-[11.5px] text-faint'>{hostOf(target.url)}</span>
+        <span className='max-w-56 truncate font-mono text-[11.5px] text-faint'>
+          {hostOf(target.url)}
+        </span>
       </span>
     ),
   }
@@ -301,61 +302,62 @@ export const ServiceResults = ({ services, mode, results, selection }: ServiceRe
   )
   const columns = columnsFor(mode, scale)
 
+  const groups = visible.map(({ service, rows }): DataTableGroup<Row> => {
+    const counts = rows.reduce(
+      (acc, row) => {
+        const tone = statusOf(row.target, row.entry?.result).tone
+        if (tone === 'success') acc.ok += 1
+        else if (tone === 'warning' || tone === 'error') acc.bad += 1
+        return acc
+      },
+      { ok: 0, bad: 0 },
+    )
+    return {
+      id: service.id,
+      label: service.name,
+      rows,
+      header: (
+        <>
+          {selection && (
+            <Checkbox
+              checked={selection.selected.has(service.id)}
+              disabled={selection.disabled}
+              label={`Include ${service.name}`}
+              onCheckedChange={(checked) => selection.toggle(service.id, checked)}
+            />
+          )}
+          <span>{service.name}</span>
+          <span className='text-[12px] font-normal text-faint tabular-nums'>{rows.length}</span>
+          <span className='hidden min-w-0 truncate font-normal text-faint xl:inline'>
+            {service.description}
+          </span>
+          {counts.bad > 0 ? (
+            <span className='ml-auto flex shrink-0 items-center gap-1.5 text-[12px] font-normal text-muted'>
+              <StatusDot tone='warning' />
+              {counts.bad} need attention
+            </span>
+          ) : counts.ok === rows.length ? (
+            <span className='ml-auto flex shrink-0 items-center gap-1.5 text-[12px] font-normal text-muted'>
+              <StatusDot tone='success' />
+              All healthy
+            </span>
+          ) : null}
+        </>
+      ),
+    }
+  })
+
   return (
     <>
-      {visible.map(({ service, rows }) => {
-        const counts = rows.reduce(
-          (acc, row) => {
-            const tone = statusOf(row.target, row.entry?.result).tone
-            if (tone === 'success') acc.ok += 1
-            else if (tone === 'warning' || tone === 'error') acc.bad += 1
-            return acc
-          },
-          { ok: 0, bad: 0 },
-        )
-        return (
-          <section aria-label={service.name} key={service.id}>
-            <GroupHeader
-              count={rows.length}
-              trailing={
-                counts.bad > 0 ? (
-                  <span className='flex items-center gap-1.5 text-[12px] text-muted'>
-                    <StatusDot tone='warning' />
-                    {counts.bad} need attention
-                  </span>
-                ) : counts.ok === rows.length ? (
-                  <span className='flex items-center gap-1.5 text-[12px] text-muted'>
-                    <StatusDot tone='success' />
-                    All healthy
-                  </span>
-                ) : null
-              }
-            >
-              {selection && (
-                <Checkbox
-                  checked={selection.selected.has(service.id)}
-                  disabled={selection.disabled}
-                  label={`Include ${service.name}`}
-                  onCheckedChange={(checked) => selection.toggle(service.id, checked)}
-                />
-              )}
-              <span>{service.name}</span>
-              <span className='hidden truncate font-normal text-faint xl:inline'>
-                {service.description}
-              </span>
-            </GroupHeader>
-            <DataTable
-              columns={columns}
-              empty={null}
-              getRowId={(row) => row.target.id}
-              label={`${service.name} targets`}
-              onRowOpen={dialog.show}
-              rows={rows}
-              selectedRowId={dialog.open ? (dialog.item?.target.id ?? null) : null}
-            />
-          </section>
-        )
-      })}
+      <DataTable
+        columns={columns}
+        empty={null}
+        getRowId={(row) => row.target.id}
+        groups={groups}
+        label='Targets'
+        onRowOpen={dialog.show}
+        selectedRowId={dialog.open ? (dialog.item?.target.id ?? null) : null}
+      />
       <DetailDialog
         meta={dialog.item && <StatusBadge row={dialog.item} />}
         onOpenChange={dialog.onOpenChange}
@@ -438,7 +440,7 @@ const TargetDetail = ({ row }: { row: Row }) => {
       <DetailSection>
         <dl className='grid'>
           <Row label='URL'>
-            <span className='font-mono text-[11.5px] break-all'>{target.url}</span>
+            <span className='font-mono text-[11.5px] break-all select-text'>{target.url}</span>
           </Row>
           <Row label='Check'>
             {target.check === 'reachability'
@@ -460,7 +462,9 @@ const TargetDetail = ({ row }: { row: Row }) => {
             </Row>
           )}
         </dl>
-        {target.note && <p className='text-[12px] leading-5 text-muted'>{target.note}</p>}
+        {target.note && (
+          <p className='text-[12px] leading-5 text-muted select-text'>{target.note}</p>
+        )}
       </DetailSection>
 
       {result?.downloads.map((download) => (
@@ -499,7 +503,7 @@ const TargetDetail = ({ row }: { row: Row }) => {
             )}
           </dl>
           {download.errorMessage && (
-            <p className='text-[12px] leading-5 text-muted'>{download.errorMessage}</p>
+            <p className='text-[12px] leading-5 text-muted select-text'>{download.errorMessage}</p>
           )}
           <AttemptsTable attempts={download.attempts} label='Connections' />
         </DetailSection>
@@ -515,7 +519,7 @@ const TargetDetail = ({ row }: { row: Row }) => {
       {failures.length > 0 && (
         <DetailSection>
           <SectionLabel>Raw errors</SectionLabel>
-          <ul className='grid gap-1 font-mono text-[11.5px] leading-5 text-secondary'>
+          <ul className='grid gap-1 font-mono text-[11.5px] leading-5 text-secondary select-text'>
             {failures.map((a, i) => (
               <li key={i}>
                 <span className='text-faint'>
