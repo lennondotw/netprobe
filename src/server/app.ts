@@ -7,6 +7,7 @@ import { z } from 'zod'
 import type { AppConfig, IdentityReport, RunEvent } from '../shared/types.ts'
 import { publicTarget, type ResolvedConfig } from './config.ts'
 import type { Store } from './db.ts'
+import { ExitError } from './exits.ts'
 import { collectHostInfo } from './host.ts'
 import { collectIdentity } from './identity.ts'
 import { isFinished, type Runner } from './runner.ts'
@@ -53,7 +54,13 @@ export const buildApp = async ({ config, store, runner, runtime, webRoot, logger
       ...service,
       targets: service.targets.map(publicTarget),
     })),
-    egress: config.egress.map(({ id, name, proxy }) => ({ id, name, proxy })),
+    egress: config.egress.map(({ id, name, kind, proxy, detail }) => ({
+      id,
+      name,
+      kind,
+      proxy,
+      detail,
+    })),
     defaults: {
       repeats: config.probe.repeats,
       ipFamily: config.ipFamily,
@@ -107,7 +114,13 @@ export const buildApp = async ({ config, store, runner, runtime, webRoot, logger
         .finally(() => inflight.delete(egress.id))
       inflight.set(egress.id, pending)
     }
-    return pending
+    try {
+      return await pending
+    } catch (error) {
+      // The exit cannot be used here (e.g. its interface is missing): say why.
+      if (error instanceof ExitError) return reply.code(503).send({ error: error.message })
+      throw error
+    }
   })
 
   app.get('/api/runs', async (request) => {

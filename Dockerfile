@@ -14,9 +14,9 @@ LABEL org.opencontainers.image.title="Netprobe" \
   org.opencontainers.image.source="https://github.com/lennondotw/netprobe" \
   org.opencontainers.image.licenses="MIT"
 # curl runs HTTP probes, iputils-ping runs ICMP probes, ca-certificates gives both the same
-# trust store as other clients.
+# trust store as other clients, iproute2 sets up routing for gateway exits.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends curl ca-certificates iputils-ping \
+  && apt-get install -y --no-install-recommends curl ca-certificates iputils-ping iproute2 \
   && rm -rf /var/lib/apt/lists/* \
   && mkdir -p /data /config \
   && chown node:node /data
@@ -31,7 +31,9 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/src/server ./src/server
 COPY --from=build /app/src/shared ./src/shared
-USER node
+COPY docker/entrypoint.sh /usr/local/bin/netprobe-entrypoint
+# The entrypoint starts as root only to set up gateway exits, then runs the server as `node`.
+ENTRYPOINT ["netprobe-entrypoint"]
 VOLUME /data
 EXPOSE 8080
 # Shell form so the check follows NETPROBE_PORT (host networking often needs another port).

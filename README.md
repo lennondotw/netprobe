@@ -19,8 +19,9 @@ an office gateway.
   shows as _Intermittent_, never as healthy.
 - **How fast is the download path?** Download targets are measured over one connection and
   over several range-split connections, reported in Mbps and MB/s with the bytes received.
-- **Does the exit matter?** Named HTTP/SOCKS proxies can be configured as egress options, and
-  every run records the public IP it left from.
+- **Does the exit matter?** Exits can be HTTP/SOCKS proxies, another network interface, or a
+  gateway such as a LAN side router (routed at the network layer, no proxy settings), and every
+  run records the public IP it left from.
 - **What is this machine's network setup?** The Host page shows the device, OS, interfaces,
   default routes, DNS servers, proxy settings, and flags tunnels and fake-IP DNS.
 - **Who does the internet think this host is?** The Egress page asks 16 independent services
@@ -56,7 +57,7 @@ Each service can be run on its own from its group header, or a whole category fr
 | `stun`    | Binding request; records the public address UDP traffic leaves from                                  |
 | `quic`    | Version negotiation: proves a QUIC endpoint (HTTP/3, DoQ) is reachable over UDP, without a handshake |
 
-Socket-level probes cannot go through an HTTP or SOCKS proxy, so they only run on a direct egress.
+Socket-level probes cannot go through an HTTP or SOCKS proxy, so proxy exits run HTTP targets only.
 Jitter is the mean absolute difference between consecutive round trips.
 
 ### Reading the results
@@ -158,6 +159,9 @@ exits:
   - id: office
     name: Office proxy
     proxy: socks5h://10.0.0.2:1080
+  - id: side-router # network layer: see docs/deploy.md
+    name: Side router
+    gateway: 192.168.1.240
 
 presets:
   exclude: [social, github.objects] # a whole service, or one target

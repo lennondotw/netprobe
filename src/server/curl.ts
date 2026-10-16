@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 
 import type { IpFamily } from '../shared/types.ts'
+import { type ExitResolver, resolveEntries } from './exits.ts'
 
 /**
  * Write-out fields, tab-separated. `errormsg` goes last because it is free text. The built-in
@@ -62,6 +63,10 @@ export interface CurlRequest {
   maxFilesize?: number
   userAgent: string
   headers?: Record<string, string>
+  /** Network interface to send from (curl --interface). */
+  interface?: string | null
+  /** Pre-resolved addresses as `host:port:address` (curl --resolve). */
+  resolve?: string[]
 }
 
 const proxyEnvKeys = /^(https?|all|no|ftp)_proxy$/i
@@ -79,6 +84,8 @@ export const buildCurlArgs = (request: CurlRequest): string[] => {
   if (request.ipFamily === 'ipv6') args.push('--ipv6')
   if (request.proxy) args.push('--proxy', request.proxy)
   else args.push('--noproxy', '*')
+  if (request.interface) args.push('--interface', request.interface)
+  for (const entry of request.resolve ?? []) args.push('--resolve', entry)
   if (request.followRedirects) args.push('--location', '--max-redirs', '5')
   if (request.range) args.push('--range', request.range)
   if (request.maxFilesize) args.push('--max-filesize', String(request.maxFilesize))
@@ -176,11 +183,16 @@ export interface FetchTextOptions {
   body?: string
   headers?: Record<string, string>
   userAgent?: string
+  /** Network interface to send from (curl --interface). */
+  interface?: string | null
+  /** Resolve the URL's host with this instead of the system resolver. */
+  resolver?: ExitResolver | null
 }
 
 /** Run curl and return its body as text. Used for small API responses, never for targets. */
-export const fetchText = (url: string, options: FetchTextOptions): Promise<string> =>
-  new Promise((resolve, reject) => {
+export const fetchText = async (url: string, options: FetchTextOptions): Promise<string> => {
+  const pinned = await resolveEntries(url, options.resolver ?? null, options.ipFamily)
+  return new Promise((resolve, reject) => {
     const args = [
       '-q',
       '--silent',
@@ -193,6 +205,8 @@ export const fetchText = (url: string, options: FetchTextOptions): Promise<strin
     if (options.ipFamily === 'ipv6') args.push('--ipv6')
     if (options.proxy) args.push('--proxy', options.proxy)
     else args.push('--noproxy', '*')
+    if (options.interface) args.push('--interface', options.interface)
+    for (const entry of pinned) args.push('--resolve', entry)
     if (options.userAgent) args.push('--user-agent', options.userAgent)
     for (const [name, value] of Object.entries(options.headers ?? {}))
       args.push('--header', `${name}: ${value}`)
@@ -215,6 +229,7 @@ export const fetchText = (url: string, options: FetchTextOptions): Promise<strin
     })
     child.stdin.end(options.body ?? '')
   })
+}
 
 export const curlVersion = (): Promise<string> =>
   new Promise((resolve) => {

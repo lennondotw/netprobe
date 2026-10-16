@@ -189,9 +189,35 @@
             "description": "Shown in the egress picker."
           },
           "proxy": {
-            "description": "http://, https://, socks5:// (DNS resolved locally), or socks5h:// (DNS resolved by the proxy). Credentials in the URL are never shown or logged. Omit for a direct connection.",
+            "description": "http://, https://, socks5:// (DNS resolved locally), or socks5h:// (DNS resolved by the proxy). Only HTTP probes can use a proxy. Credentials in the URL are never shown or logged.",
             "type": "string",
             "format": "uri"
+          },
+          "interface": {
+            "description": "Bind every probe of this exit to a network interface (e.g. \"wg0\"), using the routes it already has. curl and ping bind to the device; socket probes bind to its address.",
+            "type": "string",
+            "minLength": 1
+          },
+          "gateway": {
+            "description": "Send this exit through a gateway on a directly connected network, such as a LAN side router. In Docker the container sets up policy routing for it at start (needs the NET_ADMIN capability), so only this exit uses the gateway.",
+            "type": "string",
+            "format": "ipv4",
+            "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+          },
+          "dns": {
+            "description": "Resolve names for this exit with this DNS server, queried through the exit itself. Useful when the gateway hands out fake IPs and routes by domain.",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "ipv4",
+                "pattern": "^(?:(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\\.){3}(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])$"
+              },
+              {
+                "type": "string",
+                "format": "ipv6",
+                "pattern": "^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))$"
+              }
+            ]
           }
         },
         "required": [
@@ -199,7 +225,7 @@
           "name"
         ],
         "additionalProperties": false,
-        "description": "A network exit runs can be sent through."
+        "description": "A network exit runs can be sent through. Without proxy, interface, or gateway it uses the system routing."
       }
     },
     "presets": {

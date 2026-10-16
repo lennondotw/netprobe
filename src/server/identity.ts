@@ -11,6 +11,7 @@ import type {
 } from '../shared/types.ts'
 import type { ResolvedEgress } from './config.ts'
 import { fetchText, type FetchTextOptions } from './curl.ts'
+import { type ExitRoute, routeFor } from './exits.ts'
 import { redactText } from './redact.ts'
 
 type Json = Record<string, unknown>
@@ -451,12 +452,24 @@ const proxycheck = async (
   return result
 }
 
-/** Ask the system resolver for TXT records that name the resolver the query reached. */
-const whoami = async (): Promise<{
+/**
+ * Ask for TXT records that name the resolver the query reached: the exit's own DNS server, sent
+ * from the exit's address, or else the system resolver.
+ */
+const whoami = async (
+  egress: ResolvedEgress,
+  exit: ExitRoute,
+): Promise<{
   resolvers: { method: string; ip: string; note: string | null }[]
   notes: string[]
 }> => {
   const resolver = new Resolver({ timeout: 4000, tries: 1 })
+  if (egress.dns) {
+    resolver.setServers([egress.dns])
+    const v4 = exit.binding?.address4
+    const v6 = exit.binding?.address6
+    if (v4 || v6) resolver.setLocalAddress(v4 ?? undefined, v6 ?? undefined)
+  }
   const found: { method: string; ip: string; note: string | null }[] = []
   const notes: string[] = []
 
@@ -583,12 +596,20 @@ export const collectIdentity = async (
   signal: AbortSignal,
 ): Promise<IdentityReport> => {
   const started = performance.now()
-  const base = { proxy: egress.rawProxy, timeoutMs: 8000, signal, userAgent: 'netprobe/0.1' }
+  const exit = routeFor(egress, 'auto')
+  const base = {
+    proxy: egress.rawProxy,
+    interface: exit.binding?.interface ?? null,
+    resolver: exit.resolver,
+    timeoutMs: 8000,
+    signal,
+    userAgent: 'netprobe/0.1',
+  }
   const enabled = sources.filter((source) => !options.excludeSources.includes(sourceGroup(source)))
 
   const [observations, dnsWhoami, leak] = await Promise.all([
     Promise.all(enabled.map((source) => observe(source, base))),
-    whoami(),
+    whoami(egress, exit),
     options.dnsLeakTest
       ? leakTest(base).catch((error: unknown) => ({
           resolvers: [],
@@ -609,7 +630,13 @@ export const collectIdentity = async (
     )
   }
 
-  const publicEgress: EgressInfo = { id: egress.id, name: egress.name, proxy: egress.proxy }
+  const publicEgress: EgressInfo = {
+    id: egress.id,
+    name: egress.name,
+    kind: egress.kind,
+    proxy: egress.proxy,
+    detail: egress.detail,
+  }
   return {
     egress: publicEgress,
     collectedAt: new Date().toISOString(),

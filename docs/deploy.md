@@ -37,6 +37,49 @@ with `docker compose -f compose.host.yaml down -v`.
      `X-Accel-Buffering: no`, so nginx does not buffer them.
 3. Optionally add a TLS certificate and an access list. Netprobe has no authentication of its own.
 
+## Exits through another interface or gateway
+
+An exit with `gateway` (or `interface`) sends its probes out of a different network path at the
+network layer: no proxy settings or environment variables, so every probe kind (HTTP, ICMP, TCP,
+DNS, STUN, QUIC) takes that path. A typical use is comparing the normal route with a side router
+(a transparent proxy or VPN gateway on the LAN) without sending the whole host through it.
+
+This needs the container to have its own network namespace, so use bridge networking plus a
+second network that reaches the gateway, and the `NET_ADMIN` capability. At start the container
+adds one routing table per such exit and rules that select it only for traffic from (or bound to)
+that interface, then drops to an unprivileged user. Routing for the host and for other containers
+is not touched. A `compose.override.yaml` next to `compose.yaml`:
+
+```yaml
+services:
+  netprobe:
+    cap_add: [NET_ADMIN]
+    networks:
+      default: {}
+      lan:
+        ipv4_address: 192.168.1.243 # a free address on the gateway's network
+networks:
+  lan:
+    external: true # e.g. a macvlan network created with `docker network create -d macvlan …`
+```
+
+and in `config/netprobe.yaml`:
+
+```yaml
+exits:
+  - id: direct
+    name: Direct
+  - id: side-router
+    name: Side router
+    gateway: 192.168.1.240
+    dns: 192.168.1.240 # optional: resolve names through it too
+```
+
+Keep the bridge as the default network so the page stays reachable and the `direct` exit keeps
+the host's route. Bound exits are IPv4 only. Without the policy routing (host networking, macOS,
+or a missing capability), curl and ping still bind to the interface, but socket probes report
+that they cannot be bound instead of silently taking the default route.
+
 ## `.local` names
 
 On macOS, Bonjour already advertises the machine as `<LocalHostName>.local` (`scutil --get

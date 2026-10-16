@@ -6,6 +6,7 @@ import { connect as connectTls, type TLSSocket } from 'node:tls'
 
 import type { Attempt, ProbeKind } from '../../shared/types.ts'
 import {
+  localAddressFor,
   now,
   ProbeError,
   type ProbeContext,
@@ -100,7 +101,7 @@ const lookupStep = async (
   started: number,
   remote: { ip: string | null; port: number | null },
 ) => {
-  const target = await resolve(endpoint.host, context.ipFamily)
+  const target = await resolve(endpoint.host, context.ipFamily, context.resolver)
   if (target.resolved) timings.dns = now() - started
   remote.ip = target.address
   remote.port = endpoint.port || null
@@ -116,6 +117,7 @@ const tcpProbe = (endpoint: Endpoint, context: ProbeContext) =>
         host: target.address,
         port: endpoint.port,
         family: target.family,
+        localAddress: localAddressFor(context, target.family),
       })
       onCleanup(() => socket.destroy())
       socket.once('connect', () => {
@@ -149,17 +151,30 @@ const dotProbe = (endpoint: Endpoint, context: ProbeContext) =>
     track('tcp')
     return new Promise<string>((done, fail) => {
       const servername = endpoint.params.get('sni') ?? (target.resolved ? endpoint.host : undefined)
-      const socket: TLSSocket = connectTls({
+      // TCP first, bound to the exit's address, then TLS over it: the TLS options have no
+      // local address of their own.
+      const raw: Socket = connectTcp({
         host: target.address,
         port: endpoint.port,
+        family: target.family,
+        localAddress: localAddressFor(context, target.family),
+      })
+      // `host` is what the certificate is checked against when there is no SNI name.
+      const socket: TLSSocket = connectTls({
+        socket: raw,
+        host: target.address,
         servername,
         ALPNProtocols: ['dot'],
       })
-      onCleanup(() => socket.destroy())
-      socket.once('connect', () => {
+      onCleanup(() => {
+        socket.destroy()
+        raw.destroy()
+      })
+      raw.once('connect', () => {
         timings.connect = now() - started
         track('tls')
       })
+      raw.once('error', fail)
       socket.once('secureConnect', () => {
         timings.tls = now() - started
         track('http')
@@ -214,9 +229,12 @@ const udpExchange = (
         done(detail)
       })
       socket.once('error', fail)
-      socket.send(packet, endpoint.port, target.address, (error) => {
-        if (error) fail(error)
-      })
+      // Bind first when the exit has an address, so the datagram leaves through it.
+      socket.bind({ address: localAddressFor(context, target.family), port: 0 }, () =>
+        socket.send(packet, endpoint.port, target.address, (error) => {
+          if (error) fail(error)
+        }),
+      )
     })
   })
 
@@ -295,7 +313,7 @@ export const runPing = async (
   let address: string
   let family: 4 | 6
   try {
-    const target = await resolve(host, context.ipFamily)
+    const target = await resolve(host, context.ipFamily, context.resolver)
     address = target.address
     family = target.family
   } catch (error) {
@@ -319,6 +337,8 @@ export const runPing = async (
   const command = family === 6 && darwin ? 'ping6' : 'ping'
   const args = ['-n', '-c', String(count), '-i', '0.2']
   if (family === 6 && !darwin) args.push('-6')
+  // Bind to the exit's interface: -I on Linux (iputils), -b (boundif) on macOS.
+  if (context.bind) args.push(darwin ? '-b' : '-I', context.bind.interface)
   // Per-reply wait: milliseconds on macOS, seconds on Linux. ping6 on macOS has no such flag.
   if (!(family === 6 && darwin))
     args.push('-W', darwin ? String(waitMs) : String(Math.ceil(waitMs / 1000)))

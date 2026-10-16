@@ -160,11 +160,24 @@ export interface RuntimeInfo {
 /** `queued` runs wait for the run ahead of them; runs never overlap. */
 export type RunStatus = 'queued' | 'running' | 'completed' | 'cancelled' | 'failed'
 
+/**
+ * How an exit sends traffic:
+ * - `direct`: the system's routing.
+ * - `proxy`: through an HTTP or SOCKS proxy (HTTP probes only).
+ * - `interface`: bound to a network interface, using whatever routes it has.
+ * - `gateway`: bound to the interface facing a gateway (e.g. a LAN side router), with policy
+ *   routing that sends this exit's traffic, and only this exit's, through that gateway.
+ */
+export type ExitKind = 'direct' | 'proxy' | 'interface' | 'gateway'
+
 export interface EgressSnapshot {
   id: string
   name: string
+  kind: ExitKind
   /** Proxy URL with credentials removed, or null for a direct connection. */
   proxy: string | null
+  /** One-line description of the route, e.g. "eth1 → 10.147.16.240". */
+  detail: string | null
   /** Public IP as seen by the configured echo endpoint, if it answered. */
   publicIp: string | null
   publicIpError: string | null
@@ -223,7 +236,9 @@ export interface ServiceInfo {
 export interface EgressInfo {
   id: string
   name: string
+  kind: ExitKind
   proxy: string | null
+  detail: string | null
 }
 
 export interface AppConfig {

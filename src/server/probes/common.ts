@@ -11,7 +11,17 @@ export interface ProbeContext {
   timeoutMs: number
   ipFamily: IpFamily
   signal: AbortSignal
+  /** The exit's interface and addresses; sockets bind to them so they follow its route. */
+  bind?: { interface: string; address4: string | null; address6: string | null } | null
+  /** The exit's own resolver, when it has one; null falls back to the system resolver. */
+  resolver?:
+    | ((host: string, family: IpFamily) => Promise<{ address: string; family: 4 | 6 } | null>)
+    | null
 }
+
+/** The local address a socket should bind to for this exit, or undefined for no binding. */
+export const localAddressFor = (context: Pick<ProbeContext, 'bind'>, family: 4 | 6) =>
+  (family === 6 ? context.bind?.address6 : context.bind?.address4) ?? undefined
 
 /** Timings collected while a probe runs, in ms from the probe's start. */
 export interface ProbeTimings {
@@ -40,6 +50,7 @@ const familyNumber = (family: IpFamily) => (family === 'ipv4' ? 4 : family === '
 export const resolve = async (
   host: string,
   family: IpFamily,
+  resolver?: ProbeContext['resolver'],
 ): Promise<{ address: string; family: 4 | 6; resolved: boolean }> => {
   const literal = isIP(host)
   if (literal) {
@@ -49,6 +60,8 @@ export const resolve = async (
     return { address: host, family: literal as 4 | 6, resolved: false }
   }
   try {
+    const viaExit = resolver ? await resolver(host, family) : null
+    if (viaExit) return { ...viaExit, resolved: true }
     const result = await lookup(host, { family: familyNumber(family) })
     return { address: result.address, family: result.family as 4 | 6, resolved: true }
   } catch (error) {

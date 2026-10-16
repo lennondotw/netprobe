@@ -42,6 +42,14 @@ exits:
   # - id: http-proxy
   #   name: HTTP proxy
   #   proxy: http://user:password@proxy.internal:3128
+  # Network-layer exits (Linux, in Docker with NET_ADMIN): no proxy settings involved.
+  # - id: side-router
+  #   name: Side router
+  #   gateway: 192.168.1.240 # a gateway on a network the container is attached to
+  #   dns: 192.168.1.240 # optional: resolve through it as well
+  # - id: wireguard
+  #   name: WireGuard
+  #   interface: wg0
 
 # Built-in services. Completion lists every id.
 presets:

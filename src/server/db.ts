@@ -28,6 +28,9 @@ const normalizeRun = (raw: string): RunRecord => {
   run.queueAhead ??= null
   run.runtime.dockerNetwork ??= null
   run.runtime.vm ??= false
+  // Runs from before exits had kinds: a proxy or the system route.
+  run.egress.kind ??= run.egress.proxy ? 'proxy' : 'direct'
+  run.egress.detail ??= run.egress.proxy ?? 'System routing'
   return run
 }
 

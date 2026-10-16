@@ -144,10 +144,31 @@ const exitSchema = z
       .url({ protocol: /^(https?|socks5h?|socks4a?)$/ })
       .optional()
       .describe(
-        'http://, https://, socks5:// (DNS resolved locally), or socks5h:// (DNS resolved by the proxy). Credentials in the URL are never shown or logged. Omit for a direct connection.',
+        'http://, https://, socks5:// (DNS resolved locally), or socks5h:// (DNS resolved by the proxy). Only HTTP probes can use a proxy. Credentials in the URL are never shown or logged.',
+      ),
+    interface: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'Bind every probe of this exit to a network interface (e.g. "wg0"), using the routes it already has. curl and ping bind to the device; socket probes bind to its address.',
+      ),
+    gateway: z
+      .ipv4()
+      .optional()
+      .describe(
+        'Send this exit through a gateway on a directly connected network, such as a LAN side router. In Docker the container sets up policy routing for it at start (needs the NET_ADMIN capability), so only this exit uses the gateway.',
+      ),
+    dns: z
+      .union([z.ipv4(), z.ipv6()])
+      .optional()
+      .describe(
+        'Resolve names for this exit with this DNS server, queried through the exit itself. Useful when the gateway hands out fake IPs and routes by domain.',
       ),
   })
-  .describe('A network exit runs can be sent through.')
+  .describe(
+    'A network exit runs can be sent through. Without proxy, interface, or gateway it uses the system routing.',
+  )
 
 const egressModule = z
   .strictObject({
@@ -317,6 +338,9 @@ export interface ResolvedTarget extends TargetInfo {
 export interface ResolvedEgress extends EgressInfo {
   /** The proxy URL including credentials. Never leaves the server. */
   rawProxy: string | null
+  interfaceName: string | null
+  gateway: string | null
+  dns: string | null
 }
 
 export interface ResolvedModules {
@@ -533,6 +557,16 @@ export const resolveConfig = (input: unknown): ResolvedConfig => {
     .filter((service) => service.targets.length > 0)
 
   config.exits.forEach((exit, index) => {
+    const routes = [exit.proxy, exit.interface, exit.gateway].filter(Boolean).length
+    if (routes > 1) {
+      issue(['exits', index], 'use only one of proxy, interface, and gateway')
+    }
+    if (exit.dns && exit.proxy) {
+      issue(
+        ['exits', index, 'dns'],
+        'a proxy exit resolves names through the proxy; dns does not apply',
+      )
+    }
     if (config.exits.findIndex((e) => e.id === exit.id) !== index) {
       issue(['exits', index, 'id'], `duplicate exit id "${exit.id}"`)
     }
@@ -547,12 +581,35 @@ export const resolveConfig = (input: unknown): ResolvedConfig => {
     download: config.download,
     ipFamily: config.ipFamily,
     publicIpCheckUrl: config.publicIpCheckUrl,
-    egress: config.exits.map((exit) => ({
-      id: exit.id,
-      name: exit.name,
-      proxy: exit.proxy ? redactProxy(exit.proxy) : null,
-      rawProxy: exit.proxy ?? null,
-    })),
+    egress: config.exits.map((exit): ResolvedEgress => {
+      const proxy = exit.proxy ? redactProxy(exit.proxy) : null
+      const kind = exit.proxy
+        ? 'proxy'
+        : exit.gateway
+          ? 'gateway'
+          : exit.interface
+            ? 'interface'
+            : 'direct'
+      const detail =
+        kind === 'proxy'
+          ? proxy
+          : kind === 'gateway'
+            ? `via gateway ${exit.gateway}`
+            : kind === 'interface'
+              ? `bound to ${exit.interface}`
+              : 'System routing'
+      return {
+        id: exit.id,
+        name: exit.name,
+        kind,
+        proxy,
+        detail: exit.dns ? `${detail}, DNS ${exit.dns}` : detail,
+        rawProxy: exit.proxy ?? null,
+        interfaceName: exit.interface ?? null,
+        gateway: exit.gateway ?? null,
+        dns: exit.dns ?? null,
+      }
+    }),
     services,
     targets: new Map(services.flatMap((s) => s.targets).map((t) => [t.id, t])),
   }

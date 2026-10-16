@@ -29,7 +29,9 @@ describe('config', () => {
   it('loads presets with no config', () => {
     const config = resolveConfig({})
     expect(config.services.map((s) => s.id)).toContain('github')
-    expect(config.egress).toEqual([{ id: 'direct', name: 'Direct', proxy: null, rawProxy: null }])
+    expect(config.egress).toMatchObject([
+      { id: 'direct', name: 'Direct', kind: 'direct', proxy: null },
+    ])
     expect(config.modules).toMatchObject({ downloads: true, host: true })
     expect(config.modules.egress).toMatchObject({ reputation: true, dnsLeakTest: true })
   })

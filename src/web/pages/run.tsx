@@ -93,8 +93,11 @@ export const RunPage = ({ id }: { id: string }) => {
           </span>
           <span>
             {run.egress.name}
-            {run.egress.proxy && (
-              <span className='font-mono text-faint'> via {run.egress.proxy}</span>
+            {run.egress.kind !== 'direct' && (
+              <span className='font-mono text-faint'>
+                {' '}
+                {run.egress.kind === 'proxy' ? `via ${run.egress.detail}` : run.egress.detail}
+              </span>
             )}
           </span>
           {run.egress.publicIp && <span className='font-mono'>{run.egress.publicIp}</span>}

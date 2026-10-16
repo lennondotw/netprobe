@@ -18,6 +18,14 @@ import { summarize, throughputOf, toAttempt, worstOutcome } from './classify.ts'
 import type { ResolvedConfig, ResolvedEgress, ResolvedTarget } from './config.ts'
 import { type CurlRequest, fetchText, runCurl } from './curl.ts'
 import type { Store } from './db.ts'
+import {
+  type ExitBinding,
+  type ExitRoute,
+  resolveEntries,
+  routeFor,
+  unroutedMessage,
+} from './exits.ts'
+import { now, ProbeError, toProbeAttempt } from './probes/common.ts'
 import { runPing, runSocketProbe } from './probes/index.ts'
 import { redactText } from './redact.ts'
 
@@ -95,13 +103,7 @@ export class Runner {
       status: 'queued',
       queueAhead: null,
       params: { ...params, targetIds: eligible.map((t) => t.id) },
-      egress: {
-        id: egress.id,
-        name: egress.name,
-        proxy: egress.proxy,
-        publicIp: null,
-        publicIpError: null,
-      },
+      egress: snapshotOf(egress),
       runtime: this.#runtime,
       error: null,
       totals: { targets: eligible.length, expected: 0, reachable: 0, failed: 0 },
@@ -196,7 +198,8 @@ export class Runner {
     const { record, abort } = active
     const emit = (event: RunEvent) => active.events.emit('event', event)
     try {
-      record.egress = await this.#checkEgress(egress, record.params, abort.signal)
+      const exit = routeFor(egress, record.params.ipFamily)
+      record.egress = await this.#checkEgress(egress, exit, abort.signal)
       this.#store.saveRun(record)
       emit({ type: 'run', run: { ...record } })
 
@@ -207,8 +210,8 @@ export class Runner {
         emit({ type: 'target', result: { ...result } })
 
         if (record.params.mode === 'download')
-          await this.#download(target, egress, record.params, result, abort.signal, emit)
-        else await this.#probe(target, egress, record.params, result, abort.signal, emit)
+          await this.#download(target, egress, exit, result, abort.signal, emit)
+        else await this.#probe(target, egress, exit, record.params, result, abort.signal, emit)
 
         result.status = abort.signal.aborted ? 'cancelled' : 'done'
         this.#store.saveResult(record.id, result)
@@ -250,13 +253,14 @@ export class Runner {
     this.#store.saveRun(active.record)
   }
 
-  #request(target: ResolvedTarget, egress: ResolvedEgress, params: RunParams): CurlRequest {
+  #request(target: ResolvedTarget, egress: ResolvedEgress, exit: ExitRoute): CurlRequest {
     return {
+      interface: exit.binding?.interface ?? null,
       url: target.rawUrl,
       method: target.method,
       connectTimeoutMs: this.#config.probe.connectTimeoutMs,
       maxTimeMs: this.#config.probe.timeoutMs,
-      ipFamily: params.ipFamily,
+      ipFamily: exit.ipFamily,
       proxy: egress.rawProxy,
       followRedirects: target.followRedirects,
       userAgent,
@@ -267,6 +271,7 @@ export class Runner {
   async #probe(
     target: ResolvedTarget,
     egress: ResolvedEgress,
+    exit: ExitRoute,
     params: RunParams,
     result: TargetResult,
     signal: AbortSignal,
@@ -276,8 +281,10 @@ export class Runner {
     const context = {
       connectTimeoutMs: this.#config.probe.connectTimeoutMs,
       timeoutMs: Math.min(this.#config.probe.timeoutMs, 3_000),
-      ipFamily: params.ipFamily,
+      ipFamily: exit.ipFamily,
       signal,
+      bind: exit.binding,
+      resolver: exit.resolver,
     }
 
     if (target.kind === 'icmp') {
@@ -289,18 +296,16 @@ export class Runner {
       return
     }
 
-    const request = this.#request(target, egress, params)
+    const request = this.#request(target, egress, exit)
     for (let seq = 1; seq <= repeats; seq++) {
       if (signal.aborted) break
       const startedAt = new Date().toISOString()
       const attempt =
         target.kind === 'http'
-          ? toAttempt(await runCurl(request, signal), {
-              seq,
-              startedAt,
-              expectStatus: target.expectStatus,
-            })
-          : await runSocketProbe(target.kind, target.rawUrl, { ...context, seq })
+          ? await this.#httpAttempt(request, exit, target, seq, startedAt, signal)
+          : exit.binding && !exit.routed
+            ? unrouted(exit.binding, seq, startedAt)
+            : await runSocketProbe(target.kind, target.rawUrl, { ...context, seq })
       if (attempt.errorKind !== 'cancelled') result.attempts.push(attempt)
       this.#refresh(result)
       emit({ type: 'target', result: { ...result } })
@@ -309,16 +314,59 @@ export class Runner {
     }
   }
 
+  /**
+   * One curl attempt. With an exit resolver, the lookup happens here and curl gets the address
+   * pinned; its time is added back as the DNS phase so the total stays honest.
+   */
+  async #httpAttempt(
+    request: CurlRequest,
+    exit: ExitRoute,
+    target: ResolvedTarget,
+    seq: number,
+    startedAt: string,
+    signal: AbortSignal,
+  ): Promise<Attempt> {
+    const started = now()
+    let resolve: string[]
+    try {
+      resolve = await resolveEntries(request.url, exit.resolver, exit.ipFamily)
+    } catch (error) {
+      return dnsFailure(error, seq, startedAt, started)
+    }
+    const lookupMs = resolve.length > 0 ? now() - started : 0
+    const attempt = toAttempt(await runCurl({ ...request, resolve }, signal), {
+      seq,
+      startedAt,
+      expectStatus: target.expectStatus,
+    })
+    if (lookupMs > 0) {
+      const round = (value: number) => Math.round(value * 10) / 10
+      attempt.phases.dns = round((attempt.phases.dns ?? 0) + lookupMs)
+      attempt.totalMs = round(attempt.totalMs + lookupMs)
+    }
+    return attempt
+  }
+
   async #download(
     target: ResolvedTarget,
     egress: ResolvedEgress,
-    params: RunParams,
+    exit: ExitRoute,
     result: TargetResult,
     signal: AbortSignal,
     emit: (event: RunEvent) => void,
   ) {
+    let resolve: string[]
+    try {
+      resolve = await resolveEntries(target.rawUrl, exit.resolver, exit.ipFamily)
+    } catch (error) {
+      result.attempts.push(dnsFailure(error, 1, new Date().toISOString(), now()))
+      this.#refresh(result)
+      emit({ type: 'target', result: { ...result } })
+      return
+    }
     const base: CurlRequest = {
-      ...this.#request(target, egress, params),
+      ...this.#request(target, egress, exit),
+      resolve,
       method: 'GET',
       maxTimeMs: this.#config.download.timeoutMs,
       maxFilesize: this.#config.download.maxBytes,
@@ -430,20 +478,16 @@ export class Runner {
 
   async #checkEgress(
     egress: ResolvedEgress,
-    params: RunParams,
+    exit: ExitRoute,
     signal: AbortSignal,
   ): Promise<EgressSnapshot> {
-    const snapshot: EgressSnapshot = {
-      id: egress.id,
-      name: egress.name,
-      proxy: egress.proxy,
-      publicIp: null,
-      publicIpError: null,
-    }
+    const snapshot = snapshotOf(egress)
     try {
       const body = await fetchText(this.#config.publicIpCheckUrl, {
         proxy: egress.rawProxy,
-        ipFamily: params.ipFamily,
+        interface: exit.binding?.interface ?? null,
+        resolver: exit.resolver,
+        ipFamily: exit.ipFamily,
         timeoutMs: this.#config.probe.timeoutMs,
         signal,
       })
@@ -459,9 +503,52 @@ export class Runner {
   }
 }
 
+const snapshotOf = (egress: ResolvedEgress): EgressSnapshot => ({
+  id: egress.id,
+  name: egress.name,
+  kind: egress.kind,
+  proxy: egress.proxy,
+  detail: egress.detail,
+  publicIp: null,
+  publicIpError: null,
+})
+
+/** A failed lookup through the exit's own resolver, recorded like any other DNS failure. */
+const dnsFailure = (error: unknown, seq: number, startedAt: string, started: number) =>
+  toProbeAttempt({
+    seq,
+    startedAt,
+    started,
+    timings: { dns: null, connect: null, tls: null, response: null },
+    remoteIp: null,
+    remotePort: null,
+    error: new ProbeError(
+      'dns_failure',
+      'dns',
+      redactText(error instanceof Error ? error.message : String(error)),
+    ),
+  })
+
+/**
+ * A socket probe on a bound exit without policy routing would silently take the default route,
+ * measuring the wrong path; record why it did not run instead.
+ */
+const unrouted = (binding: ExitBinding, seq: number, startedAt: string): Attempt => ({
+  ...toProbeAttempt({
+    seq,
+    startedAt,
+    started: now(),
+    timings: { dns: null, connect: null, tls: null, response: null },
+    remoteIp: null,
+    remotePort: null,
+    error: new ProbeError('other', null, unroutedMessage(binding)),
+  }),
+  totalMs: 0,
+})
+
 /**
  * Whether a target belongs in a run. Socket-level probes (ICMP, TCP, DNS, STUN, QUIC) cannot be
- * sent through an HTTP or SOCKS proxy, so they only run on a direct egress.
+ * sent through an HTTP or SOCKS proxy, so they are skipped on proxy exits.
  */
 export const isEligible = (
   target: ResolvedTarget,
@@ -470,7 +557,7 @@ export const isEligible = (
 ) => {
   if (mode === 'download') return target.download !== null
   if (target.download) return false
-  return target.kind === 'http' || egress.rawProxy === null
+  return target.kind === 'http' || egress.kind !== 'proxy'
 }
 
 /** Run async tasks with at most `limit` in flight. */

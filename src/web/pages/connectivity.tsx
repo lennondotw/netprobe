@@ -124,7 +124,7 @@ const Connectivity = ({
   })
   const cancel = useMutation({ mutationFn: cancelRun })
 
-  const viaProxy = config.egress.find((e) => e.id === egressId)?.proxy != null
+  const viaProxy = config.egress.find((e) => e.id === egressId)?.kind === 'proxy'
   const eligible = (t: TargetInfo) => isEligible(t, mode, viaProxy)
 
   // Categories in order of first appearance; services are shown grouped by category.
@@ -202,7 +202,7 @@ const Connectivity = ({
   const egressOptions = config.egress.map((e) => ({
     value: e.id,
     label: e.name,
-    detail: e.proxy ?? 'No proxy',
+    detail: e.detail,
   }))
 
   return (

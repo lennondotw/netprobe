@@ -115,7 +115,7 @@ const Egress = ({ config }: { config: AppConfig }) => {
               options={config.egress.map((e) => ({
                 value: e.id,
                 label: e.name,
-                detail: e.proxy ?? 'No proxy',
+                detail: e.detail,
               }))}
               value={egressId}
             />
