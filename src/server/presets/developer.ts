@@ -1,17 +1,10 @@
-import type { ServiceInput } from './config.ts'
+import type { ServiceInput } from '../config.ts'
+import { reachability, site } from './helpers.ts'
 
-/**
- * Built-in services. They only reference public, organisation-neutral endpoints; anything
- * deployment-specific (a bucket, a distribution, a deployment URL) is added through config by
- * declaring a service with the same id.
- *
- * `check: reachability` marks endpoints that answer unauthenticated requests with an error by
- * design. Such a response proves the network path works, not that the service would accept a
- * real request.
- */
-export const presets: ServiceInput[] = [
+export const developer: ServiceInput[] = [
   {
     id: 'github',
+    category: 'Developer',
     name: 'GitHub',
     description:
       'Web, API, raw content, source archives, release assets, and the container registry.',
@@ -66,6 +59,7 @@ export const presets: ServiceInput[] = [
   },
   {
     id: 'github-actions',
+    category: 'Developer',
     name: 'GitHub Actions',
     description:
       'Runner service, artifact and cache API, and blob storage. Blob account names vary; add the ones your runs use through config.',
@@ -95,7 +89,51 @@ export const presets: ServiceInput[] = [
     ],
   },
   {
+    id: 'registries',
+    name: 'Package registries',
+    category: 'Developer',
+    description: 'Container, Python, Rust, Go, Java, Homebrew, CocoaPods, and CDN-hosted packages.',
+    targets: [
+      reachability('docker-hub', 'Docker Hub registry', 'https://registry-1.docker.io/v2/', [401]),
+      { id: 'docker-auth', name: 'Docker Hub auth', url: 'https://auth.docker.io/token' },
+      reachability(
+        'docker-blobs',
+        'Docker Hub blobs (CDN)',
+        'https://production.cloudflare.docker.com/',
+        [403],
+      ),
+      site('pypi', 'PyPI index', 'https://pypi.org/simple/'),
+      reachability('pypi-files', 'PyPI files', 'https://files.pythonhosted.org/', [404]),
+      { id: 'crates', name: 'crates.io index', url: 'https://index.crates.io/config.json' },
+      site('go-proxy', 'Go module proxy', 'https://proxy.golang.org/'),
+      site('maven', 'Maven Central', 'https://repo.maven.apache.org/maven2/'),
+      {
+        id: 'homebrew',
+        name: 'Homebrew API',
+        url: 'https://formulae.brew.sh/api/formula/wget.json',
+      },
+      site('cocoapods', 'CocoaPods CDN', 'https://cdn.cocoapods.org/'),
+      { id: 'jsdelivr', name: 'jsDelivr', url: 'https://cdn.jsdelivr.net/npm/react/package.json' },
+      site('unpkg', 'unpkg', 'https://unpkg.com/react/package.json'),
+    ],
+  },
+  {
+    id: 'code-hosting',
+    name: 'Code hosting & AI',
+    category: 'Developer',
+    description:
+      'Other forges, model hubs, and AI APIs (unauthenticated, so 401 is the healthy answer).',
+    targets: [
+      site('gitlab', 'GitLab', 'https://gitlab.com/'),
+      site('bitbucket', 'Bitbucket', 'https://bitbucket.org/'),
+      site('huggingface', 'Hugging Face', 'https://huggingface.co/'),
+      reachability('openai', 'OpenAI API', 'https://api.openai.com/v1/models', [401]),
+      reachability('anthropic', 'Anthropic API', 'https://api.anthropic.com/v1/models', [401]),
+    ],
+  },
+  {
     id: 'aws',
+    category: 'Cloud',
     name: 'AWS',
     description:
       'S3 and CloudFront. Transfer Acceleration needs a bucket name and is configured per deployment.',
@@ -119,6 +157,7 @@ export const presets: ServiceInput[] = [
   },
   {
     id: 'vercel',
+    category: 'Cloud',
     name: 'Vercel',
     description: 'Dashboard and API. Add deployment URLs and static downloads through config.',
     targets: [
@@ -133,7 +172,8 @@ export const presets: ServiceInput[] = [
     ],
   },
   {
-    id: 'apple',
+    id: 'apple-notary',
+    category: 'Developer',
     name: 'Apple notarization',
     description:
       'Network path used by notarytool and codesign. Upload throughput needs a real submission and is out of scope.',
@@ -170,6 +210,7 @@ export const presets: ServiceInput[] = [
   },
   {
     id: 'npm',
+    category: 'Developer',
     name: 'npm registry',
     description: 'Registry metadata and package tarballs.',
     targets: [
@@ -185,15 +226,11 @@ export const presets: ServiceInput[] = [
   },
   {
     id: 'reference',
+    category: 'Network',
     name: 'Reference',
     description:
       'A neutral baseline to tell a service problem apart from a general egress problem.',
     targets: [
-      {
-        id: 'cloudflare',
-        name: 'Cloudflare trace',
-        url: 'https://www.cloudflare.com/cdn-cgi/trace',
-      },
       {
         id: 'cloudflare-25mb',
         name: 'Cloudflare 25 MB',

@@ -1,0 +1,128 @@
+import type { ServiceInput } from '../config.ts'
+import { reachability, site, tcp } from './helpers.ts'
+
+export const platforms: ServiceInput[] = [
+  {
+    id: 'apple',
+    name: 'Apple',
+    category: 'Platforms',
+    description:
+      'Web, iCloud, App Store, developer site, software updates, and push notifications.',
+    targets: [
+      site('web', 'apple.com', 'https://www.apple.com/'),
+      site('icloud', 'iCloud', 'https://www.icloud.com/'),
+      site('app-store', 'App Store', 'https://apps.apple.com/'),
+      site('developer', 'Developer', 'https://developer.apple.com/'),
+      site(
+        'software-update',
+        'Software update catalog',
+        'https://mesu.apple.com/assets/com_apple_MobileAsset_SoftwareUpdate/com_apple_MobileAsset_SoftwareUpdate.xml',
+      ),
+      tcp('apns', 'Push (APNs 443)', 'api.push.apple.com', 443),
+      tcp(
+        'apns-5223',
+        'Push courier (5223)',
+        'courier.push.apple.com',
+        5223,
+        'Devices keep their push connection on TCP 5223.',
+      ),
+    ],
+  },
+  {
+    id: 'microsoft',
+    name: 'Microsoft',
+    category: 'Platforms',
+    description: 'Web, Entra ID sign-in, Microsoft Graph, Microsoft 365, and Bing.',
+    targets: [
+      site('web', 'microsoft.com', 'https://www.microsoft.com/'),
+      {
+        id: 'entra',
+        name: 'Entra ID sign-in',
+        url: 'https://login.microsoftonline.com/common/v2.0/.well-known/openid-configuration',
+      },
+      { id: 'graph', name: 'Microsoft Graph', url: 'https://graph.microsoft.com/v1.0/' },
+      site('office', 'Microsoft 365', 'https://www.office.com/'),
+      site('teams', 'Teams', 'https://teams.microsoft.com/'),
+      site('bing', 'Bing', 'https://www.bing.com/'),
+    ],
+  },
+  {
+    id: 'google',
+    name: 'Google',
+    category: 'Platforms',
+    description: 'Search, accounts, Gmail, Fonts, and Cloud Storage.',
+    targets: [
+      site('web', 'google.com', 'https://www.google.com/'),
+      site('accounts', 'Accounts', 'https://accounts.google.com/'),
+      site('gmail', 'Gmail', 'https://mail.google.com/'),
+      { id: 'fonts', name: 'Fonts API', url: 'https://fonts.googleapis.com/css2?family=Inter' },
+      reachability('storage', 'Cloud Storage', 'https://storage.googleapis.com/', [400]),
+      reachability(
+        'gemini',
+        'Gemini API',
+        'https://generativelanguage.googleapis.com/v1beta/models',
+        [403],
+      ),
+    ],
+  },
+  {
+    id: 'cloudflare',
+    name: 'Cloudflare',
+    category: 'Platforms',
+    description: 'Web, the 1.1.1.1 HTTPS endpoint, and the API.',
+    targets: [
+      site('web', 'cloudflare.com', 'https://www.cloudflare.com/'),
+      { id: 'one', name: '1.1.1.1 over HTTPS', url: 'https://1.1.1.1/cdn-cgi/trace' },
+      reachability('api', 'API', 'https://api.cloudflare.com/client/v4/', [400]),
+    ],
+  },
+  {
+    id: 'social',
+    name: 'Social & media',
+    category: 'Social & tools',
+    description: 'Reachability of common social, messaging, and video sites.',
+    targets: [
+      site('x', 'X', 'https://x.com/'),
+      site('youtube', 'YouTube', 'https://www.youtube.com/'),
+      site('instagram', 'Instagram', 'https://www.instagram.com/'),
+      site('facebook', 'Facebook', 'https://www.facebook.com/'),
+      site('reddit', 'Reddit', 'https://www.reddit.com/'),
+      site('discord', 'Discord', 'https://discord.com/'),
+      site('telegram', 'Telegram', 'https://telegram.org/'),
+      site('telegram-api', 'Telegram Bot API', 'https://api.telegram.org/'),
+      site('whatsapp', 'WhatsApp Web', 'https://web.whatsapp.com/'),
+      site('linkedin', 'LinkedIn', 'https://www.linkedin.com/'),
+      site('tiktok', 'TikTok', 'https://www.tiktok.com/'),
+    ],
+  },
+  {
+    id: 'collaboration',
+    name: 'Collaboration tools',
+    category: 'Social & tools',
+    description: 'Chat, meetings, docs, and design tools.',
+    targets: [
+      { id: 'slack', name: 'Slack API', url: 'https://slack.com/api/api.test' },
+      site('zoom', 'Zoom', 'https://zoom.us/'),
+      site('notion', 'Notion', 'https://www.notion.so/'),
+      site('figma', 'Figma', 'https://www.figma.com/'),
+      site('linear', 'Linear', 'https://linear.app/'),
+      site('atlassian', 'Atlassian', 'https://www.atlassian.com/'),
+      site('dropbox', 'Dropbox', 'https://www.dropbox.com/'),
+    ],
+  },
+  {
+    id: 'china',
+    name: 'Mainland China',
+    category: 'Regional',
+    description: 'Domestic sites and mirrors, to tell cross-border problems apart from local ones.',
+    targets: [
+      site('baidu', 'Baidu', 'https://www.baidu.com/'),
+      site('qq', 'QQ', 'https://www.qq.com/'),
+      site('aliyun', 'Alibaba Cloud', 'https://www.aliyun.com/'),
+      site('bilibili', 'Bilibili', 'https://www.bilibili.com/'),
+      site('aliyun-mirror', 'Alibaba Cloud mirror', 'https://mirrors.aliyun.com/'),
+      site('tuna-mirror', 'TUNA mirror', 'https://mirrors.tuna.tsinghua.edu.cn/'),
+      site('npmmirror', 'npmmirror registry', 'https://registry.npmmirror.com/'),
+    ],
+  },
+]

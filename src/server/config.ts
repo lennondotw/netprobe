@@ -4,7 +4,7 @@ import { parse as parseYaml } from 'yaml'
 import { z } from 'zod'
 
 import type { EgressInfo, IpFamily, ProbeKind, ServiceInfo, TargetInfo } from '../shared/types.ts'
-import { presets } from './presets.ts'
+import { presets } from './presets/index.ts'
 import { redactProxy, redactUrl } from './redact.ts'
 
 const id = z.string().regex(/^[a-z0-9][a-z0-9-]*$/, 'lowercase letters, digits, and dashes')

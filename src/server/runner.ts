@@ -219,7 +219,7 @@ export class Runner {
     const repeats = Math.max(params.repeats, target.samples)
     const context = {
       connectTimeoutMs: this.#config.probe.connectTimeoutMs,
-      timeoutMs: Math.min(this.#config.probe.timeoutMs, 5_000),
+      timeoutMs: Math.min(this.#config.probe.timeoutMs, 3_000),
       ipFamily: params.ipFamily,
       signal,
     }
