@@ -211,14 +211,13 @@ const columnsFor = (mode: RunMode, scale: number): DataTableColumn<Row>[] => {
     id: 'target',
     header: 'Target',
     primary: true,
-    cell: ({ target, entry }) => (
+    cell: ({ target }) => (
       <span className='flex min-w-0 items-baseline gap-2'>
         <span className='font-medium text-foreground'>{target.name}</span>
         {target.kind !== 'http' && <KindTag kind={target.kind} />}
         <span className='max-w-56 truncate font-mono text-[11.5px] text-faint'>
           {hostOf(target.url)}
         </span>
-        <FakeIpHint result={entry?.result} target={target} />
       </span>
     ),
   }
@@ -328,7 +327,16 @@ const columnsFor = (mode: RunMode, scale: number): DataTableColumn<Row>[] => {
       id: phase,
       header: phase.toUpperCase(),
       className: num,
-      cell: ({ entry }) => formatMs(entry?.result.summary?.median[phase]),
+      cell: ({ target, entry }) =>
+        phase === 'dns' ? (
+          // The hint sits left of the number so right-aligned values still line up.
+          <span className='flex items-center justify-end gap-1.5'>
+            <FakeIpHint result={entry?.result} target={target} />
+            {formatMs(entry?.result.summary?.median.dns)}
+          </span>
+        ) : (
+          formatMs(entry?.result.summary?.median[phase])
+        ),
     })),
     {
       id: 'total',
