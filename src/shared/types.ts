@@ -131,6 +131,20 @@ export interface TargetSummary {
   details: string[]
 }
 
+/**
+ * The address a site saw this host connect from, read from Cloudflare's `/cdn-cgi/trace` on the
+ * site's own domain. Only sites behind Cloudflare have one.
+ */
+export interface ExitObservation {
+  /** The host that answered, after redirects. */
+  host: string
+  ip: string
+  /** Cloudflare data centre (IATA airport code) that served the request. */
+  colo: string | null
+  /** Country Cloudflare placed the address in. */
+  loc: string | null
+}
+
 export interface TargetResult {
   targetId: string
   serviceId: string
@@ -140,6 +154,8 @@ export interface TargetResult {
   summary: TargetSummary | null
   attempts: Attempt[]
   downloads: DownloadResult[]
+  /** Where the site saw the request come from; null when it is not behind Cloudflare. */
+  exit: ExitObservation | null
 }
 
 export interface RuntimeInfo {

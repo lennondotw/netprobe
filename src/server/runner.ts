@@ -7,6 +7,7 @@ import type {
   Attempt,
   DownloadResult,
   EgressSnapshot,
+  ExitObservation,
   RunDetail,
   RunEvent,
   RunParams,
@@ -28,6 +29,7 @@ import {
 import { now, ProbeError, toProbeAttempt } from './probes/common.ts'
 import { runPing, runSocketProbe } from './probes/index.ts'
 import { redactText } from './redact.ts'
+import { traceExit } from './trace.ts'
 
 const userAgent = 'netprobe/0.1 (+https://github.com/)'
 
@@ -56,6 +58,8 @@ export class Runner {
   readonly #config: ResolvedConfig
   readonly #store: Store
   readonly #runtime: RuntimeInfo
+  /** Cloudflare traces for the current run, one per host however many targets share it. */
+  #traces = new Map<string, Promise<ExitObservation | null>>()
 
   constructor(config: ResolvedConfig, store: Store, runtime: RuntimeInfo) {
     this.#config = config
@@ -119,6 +123,7 @@ export class Runner {
           summary: null,
           attempts: [],
           downloads: [],
+          exit: null,
         },
       ]),
     )
@@ -199,6 +204,7 @@ export class Runner {
     const emit = (event: RunEvent) => active.events.emit('event', event)
     try {
       const exit = routeFor(egress, record.params.ipFamily)
+      this.#traces = new Map()
       record.egress = await this.#checkEgress(egress, exit, abort.signal)
       this.#store.saveRun(record)
       emit({ type: 'run', run: { ...record } })
@@ -297,12 +303,16 @@ export class Runner {
     }
 
     const request = this.#request(target, egress, exit)
+    // The host whose response came through Cloudflare, after redirects.
+    let cloudflareHost: string | null = null
     for (let seq = 1; seq <= repeats; seq++) {
       if (signal.aborted) break
       const startedAt = new Date().toISOString()
       const attempt =
         target.kind === 'http'
-          ? await this.#httpAttempt(request, exit, target, seq, startedAt, signal)
+          ? await this.#httpAttempt(request, exit, target, seq, startedAt, signal, (host) => {
+              cloudflareHost = host
+            })
           : exit.binding && !exit.routed
             ? unrouted(exit.binding, seq, startedAt)
             : await runSocketProbe(target.kind, target.rawUrl, { ...context, seq })
@@ -312,6 +322,28 @@ export class Runner {
       // A short gap so repeats do not all land in the same congestion window.
       if (seq < repeats) await sleep(200, undefined, { signal }).catch(() => {})
     }
+
+    if (cloudflareHost && !signal.aborted) {
+      result.exit = await this.#trace(cloudflareHost, egress, exit, signal)
+      emit({ type: 'target', result: { ...result } })
+    }
+  }
+
+  #trace(host: string, egress: ResolvedEgress, exit: ExitRoute, signal: AbortSignal) {
+    let pending = this.#traces.get(host)
+    if (!pending) {
+      pending = traceExit(host, {
+        proxy: egress.rawProxy,
+        interface: exit.binding?.interface ?? null,
+        resolver: exit.resolver,
+        ipFamily: exit.ipFamily,
+        timeoutMs: 5_000,
+        signal,
+        userAgent,
+      })
+      this.#traces.set(host, pending)
+    }
+    return pending
   }
 
   /**
@@ -325,6 +357,7 @@ export class Runner {
     seq: number,
     startedAt: string,
     signal: AbortSignal,
+    onCloudflare: (host: string) => void,
   ): Promise<Attempt> {
     const started = now()
     let resolve: string[]
@@ -334,7 +367,9 @@ export class Runner {
       return dnsFailure(error, seq, startedAt, started)
     }
     const lookupMs = resolve.length > 0 ? now() - started : 0
-    const attempt = toAttempt(await runCurl({ ...request, resolve }, signal), {
+    const sample = await runCurl({ ...request, resolve }, signal)
+    if (sample.cfRay && sample.urlEffective) onCloudflare(new URL(sample.urlEffective).host)
+    const attempt = toAttempt(sample, {
       seq,
       startedAt,
       expectStatus: target.expectStatus,

@@ -13,6 +13,7 @@ const normalizeResult = (raw: string): TargetResult => {
   const fixAttempt = (attempt: TargetResult['attempts'][number]) => {
     attempt.detail ??= null
   }
+  result.exit ??= null
   result.attempts.forEach(fixAttempt)
   for (const download of result.downloads) download.attempts.forEach(fixAttempt)
   if (result.summary) {

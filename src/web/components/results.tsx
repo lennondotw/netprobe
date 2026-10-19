@@ -1,6 +1,7 @@
 import type {
   Attempt,
   DownloadResult,
+  ExitObservation,
   RunMode,
   ProbeKind,
   ServiceInfo,
@@ -201,6 +202,30 @@ const rateDetail = (download: DownloadResult | undefined) => {
   return `${formatRate(bytesPerSecond).mbs} · ${formatBytes(bytes)} in ${transferSeconds}s`
 }
 
+/** The address the site saw, with the country Cloudflare placed it in. */
+const ExitCell = ({ exit }: { exit: ExitObservation | null | undefined }) =>
+  exit ? (
+    <span className='flex min-w-0 items-baseline gap-1.5'>
+      <span className='max-w-40 truncate font-mono text-[11.5px] text-secondary'>{exit.ip}</span>
+      {exit.loc && <span className='text-[11px] text-faint'>{exit.loc}</span>}
+    </span>
+  ) : (
+    <span className='text-faint'>—</span>
+  )
+
+const exitDetail = (exit: ExitObservation | null | undefined) =>
+  exit ? (
+    <div className='grid gap-0.5'>
+      <span>
+        {exit.host} saw this request from <span className='font-mono'>{exit.ip}</span>
+      </span>
+      <span className='text-muted'>
+        Cloudflare {exit.colo ?? 'data centre unknown'}
+        {exit.loc && `, address located in ${exit.loc}`}
+      </span>
+    </div>
+  ) : null
+
 interface Row {
   target: TargetInfo
   entry: ResultEntry | undefined
@@ -369,6 +394,12 @@ const columnsFor = (mode: RunMode, scale: number): DataTableColumn<Row>[] => {
           />
         )
       },
+    },
+    {
+      id: 'exit',
+      header: 'Exit IP',
+      cell: ({ entry }) => <ExitCell exit={entry?.result.exit} />,
+      tooltip: ({ entry }) => exitDetail(entry?.result.exit),
     },
     error,
     last,

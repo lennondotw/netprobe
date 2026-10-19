@@ -22,10 +22,16 @@ const fields = [
   'time_total',
   'size_download',
   'url_effective',
+  'cf_ray',
   'errormsg',
 ] as const
 
-const writeOut = fields.map((field) => `%{${field}}`).join('\\t')
+/** Response headers among the fields (curl 7.84+); the rest are curl variables. */
+const headerFields: Partial<Record<(typeof fields)[number], string>> = { cf_ray: 'cf-ray' }
+
+const writeOut = fields
+  .map((field) => (headerFields[field] ? `%header{${headerFields[field]}}` : `%{${field}}`))
+  .join('\\t')
 
 /** One curl invocation, normalised. Times are cumulative seconds from the start, as curl reports. */
 export interface CurlSample {
@@ -43,6 +49,8 @@ export interface CurlSample {
   timeTotal: number
   sizeDownload: number
   urlEffective: string
+  /** Cloudflare's request id (`<id>-<colo>`), present when the final response came through it. */
+  cfRay: string | null
   errorMessage: string
   /** True when the process was stopped by the abort signal rather than finishing on its own. */
   aborted: boolean
@@ -116,6 +124,7 @@ export const parseWriteOut = (stdout: string): Omit<CurlSample, 'aborted'> | nul
     timeTotal: number('time_total'),
     sizeDownload: number('size_download'),
     urlEffective: value('url_effective'),
+    cfRay: /^[0-9a-f]+-[A-Z]{3}$/i.test(value('cf_ray')) ? value('cf_ray') : null,
     // Everything after the last fixed field is the message, even if it contains a tab.
     errorMessage: parts
       .slice(fields.length - 1)
@@ -166,6 +175,7 @@ export const runCurl = (request: CurlRequest, signal: AbortSignal): Promise<Curl
         timeTotal: 0,
         sizeDownload: 0,
         urlEffective: '',
+        cfRay: null,
         errorMessage: signal.aborted ? 'Cancelled' : stderr.trim() || 'curl produced no output',
         aborted: signal.aborted,
       })
