@@ -15,6 +15,7 @@ import { buttonClass } from '../components/ui/controls.tsx'
 import { MultiSelect, Segmented, Select, TabBar } from '../components/ui/inputs.tsx'
 import { MetaList, PageHeader, Toolbar } from '../components/ui/page-header.tsx'
 import { ListSkeleton } from '../components/ui/skeleton.tsx'
+import { InfoHint } from '../components/ui/tooltip.tsx'
 import { cancelRun, queryKeys, startRun, useConfig, useLatest } from '../lib/api.ts'
 import { formatBytes, formatRelative } from '../lib/format.ts'
 import { containerCaveat } from '../lib/runtime.ts'
@@ -333,6 +334,11 @@ const Connectivity = ({
             ) : (
               lastRunAt && <span>Last measured {formatRelative(lastRunAt)}</span>
             )}
+            {containerCaveat(config.runtime) && (
+              <InfoHint label='Measured from a container' text='Measured from a container'>
+                <span className='block max-w-80'>{containerCaveat(config.runtime)}</span>
+              </InfoHint>
+            )}
           </MetaList>
         </Toolbar>
         {progress && (
@@ -345,11 +351,6 @@ const Connectivity = ({
         )}
       </div>
 
-      {containerCaveat(config.runtime) && (
-        <Callout title='Measured from inside a container' tone='warning'>
-          {containerCaveat(config.runtime)}
-        </Callout>
-      )}
       {start.error && (
         <Callout role='alert' title='Could not start the run' tone='danger'>
           {start.error.message}

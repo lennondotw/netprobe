@@ -148,18 +148,21 @@ export const HostPage = () => {
       <Toolbar>
         <MetaList>
           <span>{system.hostname}</span>
-          <span>{measuredFrom(runtime)}</span>
+          {runtime.environment === 'container' && !measuresHostNetwork(runtime) ? (
+            <InfoHint label='The container’s view' text={measuredFrom(runtime)}>
+              <span className='block max-w-80'>
+                Interfaces, routes, DNS, and proxy settings below belong to the container, not the
+                machine it runs on. Use host networking, or run Netprobe on the host, to see the
+                host’s network configuration.
+              </span>
+            </InfoHint>
+          ) : (
+            <span>{measuredFrom(runtime)}</span>
+          )}
           <span>Collected {formatRelative(data.collectedAt)}</span>
         </MetaList>
       </Toolbar>
 
-      {runtime.environment === 'container' && !measuresHostNetwork(runtime) && (
-        <Callout title='This is the container’s view' tone='warning'>
-          Interfaces, routes, DNS, and proxy settings below belong to the container, not the machine
-          it runs on. Use host networking, or run Netprobe on the host, to see the host’s network
-          configuration.
-        </Callout>
-      )}
       {tunnelRoutes.length > 0 && (
         <Callout
           title={`Default route goes through a tunnel (${[...new Set(tunnelRoutes.map((r) => r.interface))].join(', ')})`}

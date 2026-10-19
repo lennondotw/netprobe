@@ -59,7 +59,8 @@ const RuntimeFooter = () => {
         {runtime.hostLabel}
       </p>
       <p className='flex items-center gap-1.5'>
-        <StatusDot tone={measuresHostNetwork(runtime) ? 'success' : 'warning'} />
+        {/* A container is a deliberate setup (separate exits, for one), not a problem: neutral. */}
+        <StatusDot tone={measuresHostNetwork(runtime) ? 'success' : 'neutral'} />
         {measuredFrom(runtime)}
       </p>
       <p className='truncate font-mono text-[10.5px] text-faint' title={runtime.curlVersion}>
