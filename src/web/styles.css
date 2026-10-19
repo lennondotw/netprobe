@@ -177,7 +177,9 @@
   body {
     min-height: 100vh;
     font-family: var(--font-sans);
-    font-feature-settings: 'cv11', 'ss01';
+    /* Tabular figures everywhere: counters, timings, and addresses never jitter as they change. */
+    font-feature-settings: 'cv11', 'ss01', 'tnum';
+    font-variant-numeric: tabular-nums;
     margin: 0;
     background: var(--canvas);
     color: var(--foreground);

@@ -25,6 +25,7 @@ erasable syntax only (no enums, namespaces, or parameter properties).
 - Targets come from config only; do not add API endpoints that accept arbitrary URLs.
 - UI: no pointer cursors, chrome text is not selectable (opt in with `select-text` for long-form
   content), and hover states use the `snap` utility (instant in, fast out).
+  Figures are tabular everywhere (set on `body`); do not switch them back to proportional.
 - Hover details go through `ui/tooltip.tsx`: a DataTable column's `tooltip` (grouped per column)
   or `InfoHint` (all hints share one group). Each group has one popup root and its own warm-up
   timer; whole cells or label + icon are the hit targets, and popups ignore the pointer.
