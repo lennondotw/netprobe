@@ -9,6 +9,7 @@ import { ListSkeleton } from '../components/ui/skeleton.tsx'
 import { useConfig, useRun } from '../lib/api.ts'
 import { formatDateTime, formatDuration } from '../lib/format.ts'
 import { Link } from '../lib/router.tsx'
+import { offerShort } from '../lib/tls.ts'
 import { useRunStream } from '../lib/use-run-stream.ts'
 import { runStatus } from './history.tsx'
 
@@ -90,6 +91,8 @@ export const RunPage = ({ id }: { id: string }) => {
         <MetaList>
           <span>
             {run.params.mode === 'quick' ? `Quick · ${run.params.repeats} repeats` : 'Download'}
+            {run.params.tlsHandshakes.length > 0 &&
+              ` · Node TLS ${run.params.tlsHandshakes.map(offerShort).join(' + ')}`}
           </span>
           <span>
             {run.egress.name}

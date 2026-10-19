@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { resolveConfig } from '../src/server/config.ts'
 import { Store } from '../src/server/db.ts'
 import { Runner } from '../src/server/runner.ts'
-import type { RunEvent, RunParams } from '../src/shared/types.ts'
+import type { RunEvent, RunParams, RuntimeInfo } from '../src/shared/types.ts'
 import { type FaultServers, startFaultServers } from './fault-server.ts'
 
 let servers: FaultServers
@@ -15,6 +15,15 @@ afterAll(async () => {
   await servers.close()
 })
 
+const runtime: RuntimeInfo = {
+  hostLabel: 'test',
+  environment: 'host',
+  dockerNetwork: null,
+  vm: false,
+  platform: 'test',
+  curlVersion: 'test',
+}
+
 const setup = () => {
   const config = resolveConfig({
     presets: { enabled: false },
@@ -22,14 +31,7 @@ const setup = () => {
     services: [{ id: 'local', targets: [{ id: 'ok', url: `${servers.http}/ok` }] }],
   })
   const store = new Store(':memory:')
-  const runner = new Runner(config, store, {
-    hostLabel: 'test',
-    environment: 'host',
-    dockerNetwork: null,
-    vm: false,
-    platform: 'test',
-    curlVersion: 'test',
-  })
+  const runner = new Runner(config, store, runtime)
   return { runner, store }
 }
 
@@ -39,6 +41,7 @@ const params: RunParams = {
   ipFamily: 'auto',
   repeats: 2,
   targetIds: ['local.ok'],
+  tlsHandshakes: [],
 }
 
 const waitFor = async (check: () => boolean, timeoutMs = 10_000) => {
@@ -77,6 +80,26 @@ describe('run queue', () => {
     expect(statuses).toContain('queued:1')
     expect(statuses).toContain('running:null')
     expect(statuses.at(-1)).toBe('completed:null')
+  })
+
+  it('adds Node TLS handshakes per host when the run asks for them', async () => {
+    const config = resolveConfig({
+      presets: { enabled: false },
+      publicIpCheckUrl: `${servers.http}/ok`,
+      services: [{ id: 'local', targets: [{ id: 'reset', url: servers.tlsReset }] }],
+    })
+    const store = new Store(':memory:')
+    const runner = new Runner(config, store, runtime)
+    const run = runner.start({
+      ...params,
+      repeats: 2,
+      targetIds: ['local.reset'],
+      tlsHandshakes: ['default', 'classic'],
+    })
+    await waitFor(() => store.getRun(run.id)?.status === 'completed')
+    const handshakes = store.getRun(run.id)!.results[0]!.handshakes
+    expect(handshakes.map((h) => h.offer)).toEqual(['default', 'classic'])
+    expect(handshakes[0]).toMatchObject({ attempts: 2, succeeded: 0, errors: { reset: 2 } })
   })
 
   it('cancels a queued run without ever starting it', async () => {

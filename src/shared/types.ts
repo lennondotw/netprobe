@@ -149,6 +149,23 @@ export interface ExitObservation {
   loc: string | null
 }
 
+/** Repeated Node TLS handshakes with one offer to a target's host. */
+export interface HandshakeResult {
+  offer: TlsOffer
+  /** `host:port` the handshakes went to. */
+  endpoint: string
+  attempts: number
+  succeeded: number
+  /** Median duration of the TLS handshake itself over the successful attempts, in ms. */
+  medianMs: number | null
+  /** What the server agreed to, e.g. "TLSv1.3 · X25519MLKEM768". */
+  negotiated: string | null
+  /** Failed attempts by kind. */
+  errors: Partial<Record<ErrorKind, number>>
+  /** One failure message, as an example. */
+  sampleError: string | null
+}
+
 export interface TargetResult {
   targetId: string
   serviceId: string
@@ -160,6 +177,8 @@ export interface TargetResult {
   downloads: DownloadResult[]
   /** Where the site saw the request come from; null when it is not behind Cloudflare. */
   exit: ExitObservation | null
+  /** Node TLS handshakes to the target's host, when the run asked for them. */
+  handshakes: HandshakeResult[]
 }
 
 export interface RuntimeInfo {
@@ -203,12 +222,22 @@ export interface EgressSnapshot {
   publicIpError: string | null
 }
 
+/**
+ * A TLS handshake made by Node's OpenSSL, as Node-based tools connect:
+ * - `default`: Node 24's default offer, with the post-quantum hybrid key share (ClientHello ~1.6 KB);
+ * - `classic`: X25519 and P-256 only (~400 bytes);
+ * - `tls12`: TLS 1.2 only.
+ */
+export type TlsOffer = 'default' | 'classic' | 'tls12'
+
 export interface RunParams {
   mode: RunMode
   egressId: string
   ipFamily: IpFamily
   repeats: number
   targetIds: string[]
+  /** Extra Node TLS handshakes to each HTTPS host in the run; empty for none. */
+  tlsHandshakes: TlsOffer[]
 }
 
 export interface RunRecord {

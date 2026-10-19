@@ -26,6 +26,11 @@ an office gateway.
 - **Which address does each site see?** For every site behind Cloudflare, the server reads
   that site's own `/cdn-cgi/trace` over the same exit and shows the address the site saw in an
   _Exit IP_ column. Rule-based proxies route per domain, so this can differ from site to site.
+- **Do Node tools' TLS handshakes get through?** Node 24 offers a post-quantum key share by
+  default, so its ClientHello is about 1.6 KB where curl's is a few hundred bytes; some
+  transparent proxies and middleboxes reset or stall the large one. The **Node TLS** option of a
+  run adds repeated handshakes to every HTTPS host in it, with any of: the default offer, classic
+  groups only, or TLS 1.2. Failures only on the default offer point at the path, not the server.
 - **How fast is the download path?** Optional (off by default, since every viewer could start
   one): a few small files on speed-test hosts, over one connection and over several range-split
   connections, reported in Mbps and MB/s with the bytes received.
@@ -42,19 +47,19 @@ an office gateway.
 
 ### Built-in targets
 
-| Category       | Services                                                                                                |
-| -------------- | ------------------------------------------------------------------------------------------------------- |
-| Network        | ICMP/TCP latency baseline, captive-portal checks, STUN and QUIC (UDP), TLS handshakes, speed-test nodes |
-| DNS            | Plain DNS over UDP to public resolvers; DoT, DoH, DoH3, and DoQ                                         |
-| Platforms      | Apple, Microsoft, Google, Cloudflare                                                                    |
-| AI             | OpenAI, Anthropic, Google AI, xAI, other and China model providers, inference, coding tools             |
-| Developer      | GitHub (web, API, storage, Packages, Pages), GitHub Actions, other forges, notarization                 |
-| Packages       | npm, language registries, container registries, package CDNs, toolchains and SDKs                       |
-| Mirrors        | Default Linux software sources; mirrors and registry proxies used in mainland China                     |
-| Cloud          | AWS, Vercel                                                                                             |
-| Tailscale      | Control plane and DERP relays (HTTPS and STUN) in nine regions                                          |
-| Social & tools | Social and messaging sites; collaboration tools                                                         |
-| Regional       | Mainland China sites                                                                                    |
+| Category       | Services                                                                                    |
+| -------------- | ------------------------------------------------------------------------------------------- |
+| Network        | ICMP/TCP latency baseline, captive-portal checks, STUN and QUIC (UDP), speed-test nodes     |
+| DNS            | Plain DNS over UDP to public resolvers; DoT, DoH, DoH3, and DoQ                             |
+| Platforms      | Apple, Microsoft, Google, Cloudflare                                                        |
+| AI             | OpenAI, Anthropic, Google AI, xAI, other and China model providers, inference, coding tools |
+| Developer      | GitHub (web, API, storage, Packages, Pages), GitHub Actions, other forges, notarization     |
+| Packages       | npm, language registries, container registries, package CDNs, toolchains and SDKs           |
+| Mirrors        | Default Linux software sources; mirrors and registry proxies used in mainland China         |
+| Cloud          | AWS, Vercel                                                                                 |
+| Tailscale      | Control plane and DERP relays (HTTPS and STUN) in nine regions                              |
+| Social & tools | Social and messaging sites; collaboration tools                                             |
+| Regional       | Mainland China sites                                                                        |
 
 Each service can be run on its own from its group header, or a whole category from the toolbar.
 
@@ -96,6 +101,11 @@ It appears for every site behind Cloudflare: a response carrying `cf-ray` marks 
 the server then reads that site's `/cdn-cgi/trace` once per run over the same exit. With a
 rule-based proxy (Clash, mihomo, Surge) each domain can leave through a different node, and this
 column shows which. Sites not behind Cloudflare show a dash.
+
+When a run uses the **Node TLS** option, a column shows each offer's successful handshakes per
+host (for example `PQ 18/30  Classic 30/30`); hovering shows the handshake time, the negotiated
+protocol and group, and the failures by kind. Each host is handshaken once per run, as many times
+as the run's repeats; proxy exits skip it, since the handshake would not go through the proxy.
 
 When remote addresses fall in `198.18.0.0/15`, a local proxy or TUN interface in fake-IP mode is
 answering DNS and terminating TCP. Netprobe flags this: DNS and TCP timings then describe the

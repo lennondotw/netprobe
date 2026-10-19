@@ -107,25 +107,3 @@ export const edge = (
   note: 'Cloudflare challenges non-browser clients on the page itself; its edge trace answers.',
   ...extra,
 })
-
-/**
- * A TLS handshake by Node's OpenSSL. `pq` offers the default key shares, including the
- * post-quantum hybrid (a ~1.6 KB ClientHello); `classic` offers only X25519 and P-256 (~400
- * bytes). Comparing the two shows paths that break on large ClientHellos.
- */
-export const tlsHandshake = (
-  id: string,
-  name: string,
-  host: string,
-  offer: 'pq' | 'classic',
-  samples = 10,
-): Target => ({
-  id,
-  name,
-  url: offer === 'pq' ? `tls://${host}` : `tls://${host}?groups=X25519:P-256`,
-  samples,
-  note:
-    offer === 'pq'
-      ? 'Default Node 24 handshake: post-quantum hybrid key share, ClientHello of about 1.6 KB.'
-      : 'Classic key shares only (X25519, P-256): ClientHello of about 400 bytes.',
-})

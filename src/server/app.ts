@@ -18,6 +18,10 @@ const startRunSchema = z.object({
   ipFamily: z.enum(['auto', 'ipv4', 'ipv6']),
   repeats: z.number().int().min(1).max(20),
   targetIds: z.array(z.string()).min(1),
+  tlsHandshakes: z
+    .array(z.enum(['default', 'classic', 'tls12']))
+    .max(3)
+    .default([]),
 })
 
 interface AppOptions {

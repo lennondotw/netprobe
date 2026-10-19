@@ -14,6 +14,7 @@ const normalizeResult = (raw: string): TargetResult => {
     attempt.detail ??= null
   }
   result.exit ??= null
+  result.handshakes ??= []
   result.attempts.forEach(fixAttempt)
   for (const download of result.downloads) download.attempts.forEach(fixAttempt)
   if (result.summary) {
@@ -27,6 +28,7 @@ const normalizeResult = (raw: string): TargetResult => {
 const normalizeRun = (raw: string): RunRecord => {
   const run = JSON.parse(raw) as RunRecord
   run.queueAhead ??= null
+  run.params.tlsHandshakes ??= []
   run.runtime.dockerNetwork ??= null
   run.runtime.vm ??= false
   // Runs from before exits had kinds: a proxy or the system route.

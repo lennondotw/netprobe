@@ -8,12 +8,14 @@ import type {
   DownloadResult,
   EgressSnapshot,
   ExitObservation,
+  HandshakeResult,
   RunDetail,
   RunEvent,
   RunParams,
   RunRecord,
   RuntimeInfo,
   TargetResult,
+  TlsOffer,
 } from '../shared/types.ts'
 import { summarize, throughputOf, toAttempt, worstOutcome } from './classify.ts'
 import type { ResolvedConfig, ResolvedEgress, ResolvedTarget } from './config.ts'
@@ -26,7 +28,7 @@ import {
   routeFor,
   unroutedMessage,
 } from './exits.ts'
-import { now, ProbeError, toProbeAttempt } from './probes/common.ts'
+import { now, ProbeError, type ProbeContext, toProbeAttempt } from './probes/common.ts'
 import { runPing, runSocketProbe } from './probes/index.ts'
 import { redactText } from './redact.ts'
 import { traceExit } from './trace.ts'
@@ -60,6 +62,8 @@ export class Runner {
   readonly #runtime: RuntimeInfo
   /** Cloudflare traces for the current run, one per host however many targets share it. */
   #traces = new Map<string, Promise<ExitObservation | null>>()
+  /** Node TLS handshakes for the current run, one series per host and offer. */
+  #handshakes = new Map<string, Promise<HandshakeResult>>()
 
   constructor(config: ResolvedConfig, store: Store, runtime: RuntimeInfo) {
     this.#config = config
@@ -124,6 +128,7 @@ export class Runner {
           attempts: [],
           downloads: [],
           exit: null,
+          handshakes: [],
         },
       ]),
     )
@@ -205,6 +210,7 @@ export class Runner {
     try {
       const exit = routeFor(egress, record.params.ipFamily)
       this.#traces = new Map()
+      this.#handshakes = new Map()
       record.egress = await this.#checkEgress(egress, exit, abort.signal)
       this.#store.saveRun(record)
       emit({ type: 'run', run: { ...record } })
@@ -327,6 +333,39 @@ export class Runner {
       result.exit = await this.#trace(cloudflareHost, egress, exit, signal)
       emit({ type: 'target', result: { ...result } })
     }
+
+    // Handshakes are socket-level: through a proxy, or on an exit sockets cannot follow, they
+    // would measure a different path, so they are skipped there.
+    const url = new URL(target.rawUrl)
+    const socketsFollowExit = egress.kind !== 'proxy' && (!exit.binding || exit.routed)
+    if (target.kind === 'http' && url.protocol === 'https:' && socketsFollowExit) {
+      const endpoint = `${url.hostname}:${url.port || 443}`
+      for (const offer of params.tlsHandshakes) {
+        if (signal.aborted) break
+        // A longer limit than other probes, so a slow handshake is not mistaken for a dropped one.
+        const handshakeContext = {
+          ...context,
+          timeoutMs: Math.min(this.#config.probe.timeoutMs, 8_000),
+        }
+        result.handshakes.push(await this.#handshake(endpoint, offer, repeats, handshakeContext))
+        emit({ type: 'target', result: { ...result } })
+      }
+    }
+  }
+
+  #handshake(
+    endpoint: string,
+    offer: TlsOffer,
+    repeats: number,
+    context: Omit<ProbeContext, 'seq'>,
+  ) {
+    const key = `${endpoint}|${offer}`
+    let pending = this.#handshakes.get(key)
+    if (!pending) {
+      pending = handshakeSeries(endpoint, offer, repeats, context)
+      this.#handshakes.set(key, pending)
+    }
+    return pending
   }
 
   #trace(host: string, egress: ResolvedEgress, exit: ExitRoute, signal: AbortSignal) {
@@ -536,6 +575,53 @@ export class Runner {
     }
     return snapshot
   }
+}
+
+const offerQuery: Record<TlsOffer, string> = {
+  default: '',
+  classic: '?groups=X25519:P-256',
+  tls12: '?version=1.2',
+}
+
+/** Repeated handshakes with one offer, a short gap apart, summarised. */
+const handshakeSeries = async (
+  endpoint: string,
+  offer: TlsOffer,
+  repeats: number,
+  context: Omit<ProbeContext, 'seq'>,
+): Promise<HandshakeResult> => {
+  const attempts: Attempt[] = []
+  for (let seq = 1; seq <= repeats; seq++) {
+    if (context.signal.aborted) break
+    const attempt = await runSocketProbe('tls', `tls://${endpoint}${offerQuery[offer]}`, {
+      ...context,
+      seq,
+    })
+    if (attempt.errorKind !== 'cancelled') attempts.push(attempt)
+    if (seq < repeats) await sleep(200, undefined, { signal: context.signal }).catch(() => {})
+  }
+  const ok = attempts.filter((a) => !a.errorKind)
+  const times = ok.map((a) => a.phases.tls).filter((t): t is number => t !== null)
+  const errors: HandshakeResult['errors'] = {}
+  for (const a of attempts) if (a.errorKind) errors[a.errorKind] = (errors[a.errorKind] ?? 0) + 1
+  return {
+    offer,
+    endpoint,
+    attempts: attempts.length,
+    succeeded: ok.length,
+    medianMs: median(times),
+    negotiated: ok[0]?.detail ?? null,
+    errors,
+    sampleError: attempts.find((a) => a.errorKind)?.errorMessage ?? null,
+  }
+}
+
+const median = (values: number[]) => {
+  if (values.length === 0) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  const middle = Math.floor(sorted.length / 2)
+  const value = sorted.length % 2 ? sorted[middle]! : (sorted[middle - 1]! + sorted[middle]!) / 2
+  return Math.round(value * 10) / 10
 }
 
 const snapshotOf = (egress: ResolvedEgress): EgressSnapshot => ({

@@ -22,28 +22,27 @@ interface SelectProps<Value extends string> {
   disabled?: boolean
 }
 
-/** Compact select in the toolbar style: a 28px trigger with a leading muted label. */
-export const Select = <Value extends string>({
+/** Trigger and menu shared by the single and multiple selects. */
+const SelectBody = <Value extends string>({
   label,
-  value,
   options,
-  onChange,
-  disabled,
-}: SelectProps<Value>) => (
-  <BaseSelect.Root
-    disabled={disabled}
-    items={options.map((o) => ({ value: o.value, label: o.label }))}
-    onValueChange={(next) => {
-      if (next !== null) onChange(next as Value)
-    }}
-    value={value}
-  >
+  display,
+  align = 'start',
+}: {
+  label: string
+  options: readonly Option<Value>[]
+  /** Renders the trigger's value; the default shows the selected item's label. */
+  display?: (value: Value[]) => ReactNode
+  /** Which trigger edge the menu lines up with. */
+  align?: 'start' | 'end'
+}) => (
+  <>
     <BaseSelect.Trigger
       aria-label={label}
       className='snap inline-flex h-7 min-w-0 shrink-0 items-center gap-1.5 rounded-md border border-line bg-surface px-2.5 text-[12.5px] font-medium text-secondary shadow-raised outline-none hover:border-line-strong hover:bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent disabled:pointer-events-none disabled:opacity-50 data-[popup-open]:bg-hover'
     >
       <span className='font-normal text-muted'>{label}</span>
-      <BaseSelect.Value className='truncate' />
+      <BaseSelect.Value className='truncate'>{display}</BaseSelect.Value>
       <BaseSelect.Icon className='text-faint'>
         <svg
           aria-hidden='true'
@@ -60,6 +59,7 @@ export const Select = <Value extends string>({
     </BaseSelect.Trigger>
     <BaseSelect.Portal>
       <BaseSelect.Positioner
+        align={align}
         alignItemWithTrigger={false}
         className='z-50 outline-none'
         sideOffset={4}
@@ -99,6 +99,77 @@ export const Select = <Value extends string>({
         </BaseSelect.Popup>
       </BaseSelect.Positioner>
     </BaseSelect.Portal>
+  </>
+)
+
+/** Compact select in the toolbar style: a 28px trigger with a leading muted label. */
+export const Select = <Value extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  disabled,
+}: SelectProps<Value>) => (
+  <BaseSelect.Root
+    disabled={disabled}
+    items={options.map((o) => ({ value: o.value, label: o.label }))}
+    onValueChange={(next) => {
+      if (next !== null) onChange(next as Value)
+    }}
+    value={value}
+  >
+    <SelectBody label={label} options={options} />
+  </BaseSelect.Root>
+)
+
+interface MultiSelectProps<Value extends string> {
+  label: string
+  value: readonly Value[]
+  options: readonly (Option<Value> & { short: string })[]
+  onChange: (value: Value[]) => void
+  disabled?: boolean
+  /** Trigger text when nothing is selected. */
+  none: string
+}
+
+/**
+ * The toolbar select with several choices; the trigger lists the short names of the picks. Its
+ * width follows the picks: they are made in the menu, so the trigger moving does not get in the way.
+ */
+export const MultiSelect = <Value extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  disabled,
+  none,
+}: MultiSelectProps<Value>) => (
+  <BaseSelect.Root
+    disabled={disabled}
+    multiple
+    onValueChange={(next) =>
+      // Keep the options' order, whatever order they were picked in.
+      onChange(options.map((o) => o.value).filter((v) => (next as Value[]).includes(v)))
+    }
+    value={[...value]}
+  >
+    {/*
+      The trigger grows and shrinks with the picks while the menu is open. In the right-aligned
+      toolbar its right edge stays put, so the menu hangs from that edge and never shifts.
+    */}
+    <SelectBody
+      align='end'
+      display={(picked) =>
+        picked.length === 0
+          ? none
+          : options
+              .filter((o) => picked.includes(o.value))
+              .map((o) => o.short)
+              .join(' + ')
+      }
+      label={label}
+      options={options}
+    />
   </BaseSelect.Root>
 )
 

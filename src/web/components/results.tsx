@@ -2,6 +2,7 @@ import type {
   Attempt,
   DownloadResult,
   ExitObservation,
+  HandshakeResult,
   RunMode,
   ProbeKind,
   ServiceInfo,
@@ -19,6 +20,7 @@ import {
   isFakeIp,
   statusOf,
 } from '../lib/format.ts'
+import { offerShort } from '../lib/tls.ts'
 import { Badge, StatusDot, type Tone } from './ui/badge.tsx'
 import { DataTable, type DataTableColumn, type DataTableGroup } from './ui/data-table.tsx'
 import { DetailDialog, DetailSection, useDetailDialog } from './ui/dialog.tsx'
@@ -227,12 +229,60 @@ const exitDetail = (exit: ExitObservation | null | undefined) =>
     </div>
   ) : null
 
+/** Each offer's success count; a failure in any of them reads as a warning. */
+const HandshakeCell = ({ handshakes }: { handshakes: readonly HandshakeResult[] }) =>
+  handshakes.length === 0 ? (
+    <span className='text-faint'>—</span>
+  ) : (
+    <span className='flex items-baseline gap-2.5 tabular-nums'>
+      {handshakes.map((h) => (
+        <span className={h.succeeded < h.attempts ? 'text-warning' : undefined} key={h.offer}>
+          <span className='text-[11px] text-faint'>{offerShort(h.offer)}</span> {h.succeeded}/
+          {h.attempts}
+        </span>
+      ))}
+    </span>
+  )
+
+const handshakeDetail = (handshakes: readonly HandshakeResult[]) =>
+  handshakes.length === 0 ? null : (
+    <div className='grid gap-1.5'>
+      {handshakes.map((h) => {
+        const errors = Object.entries(h.errors).map(([kind, count]) => `${count} ${kind}`)
+        return (
+          <div className='grid gap-0.5' key={h.offer}>
+            <span>
+              {offerShort(h.offer)}: {h.succeeded}/{h.attempts} handshakes to{' '}
+              <span className='font-mono'>{h.endpoint}</span>
+            </span>
+            <span className='text-muted'>
+              {[
+                h.medianMs !== null && `TLS ${formatMs(h.medianMs)}`,
+                h.negotiated,
+                errors.length > 0 && errors.join(', '),
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </span>
+            {h.sampleError && (
+              <span className='font-mono text-[11.5px] text-muted'>{h.sampleError}</span>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+
 interface Row {
   target: TargetInfo
   entry: ResultEntry | undefined
 }
 
-const columnsFor = (mode: RunMode, scale: number): DataTableColumn<Row>[] => {
+const columnsFor = (
+  mode: RunMode,
+  scale: number,
+  showHandshakes: boolean,
+): DataTableColumn<Row>[] => {
   const name: DataTableColumn<Row> = {
     id: 'target',
     header: 'Target',
@@ -396,6 +446,16 @@ const columnsFor = (mode: RunMode, scale: number): DataTableColumn<Row>[] => {
         )
       },
     },
+    ...(showHandshakes
+      ? [
+          {
+            id: 'handshakes',
+            header: 'Node TLS',
+            cell: ({ entry }: Row) => <HandshakeCell handshakes={entry?.result.handshakes ?? []} />,
+            tooltip: ({ entry }: Row) => handshakeDetail(entry?.result.handshakes ?? []),
+          },
+        ]
+      : []),
     {
       id: 'exit',
       header: 'Exit IP',
@@ -444,7 +504,11 @@ export const ServiceResults = ({
     0,
     ...visible.flatMap((g) => g.rows.map((r) => r.entry?.result.summary?.median.total ?? 0)),
   )
-  const columns = columnsFor(mode, scale)
+  // The column only appears once some result has handshakes: runs ask for them explicitly.
+  const showHandshakes = visible.some((g) =>
+    g.rows.some((r) => (r.entry?.result.handshakes.length ?? 0) > 0),
+  )
+  const columns = columnsFor(mode, scale, showHandshakes)
 
   const groups = visible.map(({ service, rows }): DataTableGroup<Row> => {
     const counts = rows.reduce(

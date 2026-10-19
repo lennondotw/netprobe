@@ -1,16 +1,24 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 
-import type { AppConfig, IpFamily, LatestResult, RunMode, TargetInfo } from '../../shared/types.ts'
+import type {
+  AppConfig,
+  IpFamily,
+  LatestResult,
+  RunMode,
+  TargetInfo,
+  TlsOffer,
+} from '../../shared/types.ts'
 import { type ResultEntry, ServiceResults } from '../components/results.tsx'
 import { Callout } from '../components/ui/callout.tsx'
 import { buttonClass } from '../components/ui/controls.tsx'
-import { Segmented, Select, TabBar } from '../components/ui/inputs.tsx'
+import { MultiSelect, Segmented, Select, TabBar } from '../components/ui/inputs.tsx'
 import { MetaList, PageHeader, Toolbar } from '../components/ui/page-header.tsx'
 import { ListSkeleton } from '../components/ui/skeleton.tsx'
 import { cancelRun, queryKeys, startRun, useConfig, useLatest } from '../lib/api.ts'
 import { formatBytes, formatRelative } from '../lib/format.ts'
 import { containerCaveat } from '../lib/runtime.ts'
+import { tlsOffers } from '../lib/tls.ts'
 import { useRunStream } from '../lib/use-run-stream.ts'
 
 const modes = [
@@ -95,6 +103,7 @@ const Connectivity = ({
   const [egressId, setEgressId] = useState(config.defaults.egressId)
   const [ipFamily, setIpFamily] = useState<IpFamily>(config.defaults.ipFamily)
   const [repeats, setRepeats] = useState(String(config.defaults.repeats))
+  const [handshakes, setHandshakes] = useState<TlsOffer[]>([])
   // Store what the user turned off, so services added to the config later start selected.
   const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set())
   const [ownRunId, setOwnRunId] = useOwnRunId()
@@ -149,7 +158,14 @@ const Connectivity = ({
     : 0
 
   const run = (targetIds: string[]) =>
-    start.mutate({ mode, egressId, ipFamily, repeats: Number(repeats), targetIds })
+    start.mutate({
+      mode,
+      egressId,
+      ipFamily,
+      repeats: Number(repeats),
+      targetIds,
+      tlsHandshakes: mode === 'quick' ? handshakes : [],
+    })
 
   const tabs = [allCategories, ...categories].map((value) => ({
     value,
@@ -243,6 +259,16 @@ const Connectivity = ({
                 onChange={setRepeats}
                 options={['1', '3', '5', '10', '20'].map((v) => ({ value: v, label: v }))}
                 value={repeats}
+              />
+            )}
+            {mode === 'quick' && (
+              <MultiSelect
+                disabled={running}
+                label='Node TLS'
+                none='Off'
+                onChange={setHandshakes}
+                options={tlsOffers}
+                value={handshakes}
               />
             )}
             {ownBusy && ownRunId ? (
