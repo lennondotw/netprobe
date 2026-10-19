@@ -24,6 +24,8 @@ import {
   flagLabels,
   locationOf,
   networkName,
+  type ResolverNetwork,
+  resolverNetworks,
   typeLabel,
 } from '../lib/identity.ts'
 
@@ -169,33 +171,58 @@ const Egress = ({ config }: { config: AppConfig }) => {
   )
 }
 
-const AddressList = ({ network }: { network: ExitNetwork }) => {
-  const shown = network.addresses.slice(0, 3)
-  const more = network.addresses.length - shown.length
-  return (
-    <span className='grid justify-items-end'>
-      {shown.map((a) => (
-        <span className={`${mono} text-secondary`} key={a.ip}>
-          {a.ip}
-        </span>
-      ))}
-      {more > 0 && <span className='text-[12px] text-muted'>and {more} more</span>}
-    </span>
-  )
-}
+/** A section's title bar, the same height as the toolbar, above a full-width table. */
+const SectionBar = ({
+  title,
+  hint,
+  meta,
+  top = true,
+}: {
+  title: string
+  hint?: ReactNode
+  meta?: ReactNode
+  /** False directly under the toolbar, whose bottom border already separates them. */
+  top?: boolean
+}) => (
+  <div
+    className={`flex h-10 items-center gap-2 border-b border-line text-[12.5px] font-medium ${top ? 'border-t' : ''} ${gutter}`}
+  >
+    <span>{title}</span>
+    {hint}
+    {meta && <span className='font-normal text-muted'>{meta}</span>}
+  </div>
+)
 
-const NetworkLabel = ({ network }: { network: ExitNetwork }) => (
-  <span className='grid'>
-    <span className='text-secondary'>{networkName(network)}</span>
-    <span className='text-[12px] text-faint'>
-      {network.asn ? `AS${network.asn} · ` : ''}
-      {network.locations[0] ?? 'Unknown location'}
-    </span>
+/** The first address in full, the rest as a count; the hover lists every one. */
+const Addresses = ({ ips }: { ips: readonly string[] }) => (
+  <span className='flex items-baseline gap-1.5'>
+    <span className={`${mono} text-secondary`}>{ips[0] ?? '—'}</span>
+    {ips.length > 1 && <span className='text-[12px] text-faint'>+{ips.length - 1}</span>}
   </span>
 )
 
+const addressList = (ips: readonly string[]) =>
+  ips.length > 1 ? (
+    <span className='grid gap-0.5'>
+      {ips.map((ip) => (
+        <span className='font-mono text-[11.5px]' key={ip}>
+          {ip}
+        </span>
+      ))}
+    </span>
+  ) : null
+
+const networkMeta = (asn: number | null, location: string | null | undefined) =>
+  [asn ? `AS${asn}` : null, location].filter(Boolean).join(' · ')
+
+const resolverSummary = (groups: readonly ResolverNetwork[]) => {
+  const addresses = groups.reduce((sum, g) => sum + g.resolvers.length, 0)
+  return `${addresses} address${addresses === 1 ? '' : 'es'} in ${groups.length} network${groups.length === 1 ? '' : 's'}`
+}
+
 const Report = ({ report }: { report: IdentityReport }) => {
   const networks = exitNetworks(report)
+  const resolvers = resolverNetworks(report.dns.resolvers)
   const failed = report.observations.filter((o) => !o.ok)
   const exitCountries = new Set(networks.flatMap((n) => n.locations.map(countryOf)))
   const resolverCountries = new Set(
@@ -207,175 +234,201 @@ const Report = ({ report }: { report: IdentityReport }) => {
 
   return (
     <>
-      <div className={`py-5 ${gutter}`}>
-        <Masonry
-          items={[
-            {
-              id: 'exits',
-              weight: 1 + networks.reduce((sum, n) => sum + Math.min(n.addresses.length, 4), 0),
-              node: (
-                <Panel
-                  hint={
-                    networks.length > 1 ? (
-                      <InfoHint label='Several exit networks'>
-                        <span className='grid max-w-72 gap-1'>
-                          <span className='font-medium text-foreground'>
-                            Traffic leaves through {networks.length} networks
-                          </span>
-                          <span className='text-muted'>
-                            Services disagree about where this host’s traffic comes from. A
-                            rule-based proxy or policy routing sends different destinations out
-                            through different exits.
-                          </span>
-                        </span>
-                      </InfoHint>
-                    ) : undefined
-                  }
-                  title={`Exit networks · ${answered}/${asked} sources answered`}
-                >
-                  {networks.map((network) => (
-                    <Row key={network.key} label={<NetworkLabel network={network} />}>
-                      <span className='grid justify-items-end gap-0.5'>
-                        <AddressList network={network} />
-                        <span className='text-[12px] text-muted'>
-                          seen by {network.seenBy.length} source
-                          {network.seenBy.length === 1 ? '' : 's'}
-                        </span>
-                      </span>
-                    </Row>
-                  ))}
-                </Panel>
+      <SectionBar
+        hint={
+          networks.length > 1 ? (
+            <InfoHint label='Several exit networks'>
+              <span className='grid max-w-72 gap-1'>
+                <span className='font-medium text-foreground'>
+                  Traffic leaves through {networks.length} networks
+                </span>
+                <span className='text-muted'>
+                  Services disagree about where this host’s traffic comes from. A rule-based proxy
+                  or policy routing sends different destinations out through different exits.
+                </span>
+              </span>
+            </InfoHint>
+          ) : undefined
+        }
+        meta={`${answered}/${asked} sources answered`}
+        title='Exit networks'
+        top={false}
+      />
+      <DataTable
+        columns={[
+          {
+            id: 'network',
+            header: 'Network',
+            cell: (n) => (
+              <span className='flex items-baseline gap-2'>
+                <span className='font-medium text-foreground'>{networkName(n)}</span>
+                <span className='text-[12px] text-faint'>{networkMeta(n.asn, n.locations[0])}</span>
+              </span>
+            ),
+          },
+          {
+            id: 'addresses',
+            header: 'Addresses',
+            cell: (n) => <Addresses ips={n.addresses.map((a) => a.ip)} />,
+            tooltip: (n) => addressList(n.addresses.map((a) => a.ip)),
+          },
+          {
+            id: 'seen',
+            header: 'Seen by',
+            className: 'text-right text-secondary',
+            cell: (n) => `${n.seenBy.length}/${asked}`,
+            tooltip: (n) => <Sources names={n.seenBy.map((o) => o.source)} />,
+          },
+          {
+            id: 'type',
+            header: 'Type',
+            className: 'text-secondary',
+            cell: (n) =>
+              n.types.length === 0 ? (
+                <span className='text-faint'>—</span>
+              ) : (
+                n.types.map((t) => typeLabel(t.type)).join(', ')
               ),
-            },
-            {
-              id: 'type',
-              weight: 1 + networks.length,
-              node: (
-                <Panel title='Network type'>
-                  {networks.map((network) => (
-                    <Row key={network.key} label={networkName(network)}>
-                      {network.types.length === 0 ? (
-                        <span className='text-faint'>Not classified</span>
-                      ) : (
-                        <span className='flex flex-wrap items-center justify-end gap-x-3'>
-                          {network.types.map((t) => (
-                            <InfoHint
-                              key={t.type}
-                              label={`Sources for ${typeLabel(t.type)}`}
-                              text={typeLabel(t.type)}
-                            >
-                              <Sources names={t.sources} />
-                            </InfoHint>
-                          ))}
-                        </span>
-                      )}
-                    </Row>
+            tooltip: (n) =>
+              n.types.length === 0 ? null : (
+                <span className='grid gap-0.5'>
+                  {n.types.map((t) => (
+                    <span key={t.type}>
+                      {typeLabel(t.type)}: <Sources names={t.sources} />
+                    </span>
                   ))}
-                </Panel>
+                </span>
               ),
-            },
-            {
-              id: 'reputation',
-              weight: 1 + networks.length,
-              node: (
-                <Panel title='Reputation'>
-                  {networks.map((network) => {
-                    const risk = network.risks.length
-                      ? Math.max(...network.risks.map((r) => r.risk))
-                      : null
-                    return (
-                      <Row key={network.key} label={networkName(network)}>
-                        <span className='flex flex-wrap items-center justify-end gap-x-3'>
-                          {network.flags.map((f) => (
-                            <InfoHint
-                              key={f.flag}
-                              label={`Sources flagging ${flagLabels[f.flag]}`}
-                              text={flagLabels[f.flag]}
-                            >
-                              <Sources names={f.sources} />
-                            </InfoHint>
-                          ))}
-                          {risk !== null && (
-                            <span className='flex items-center gap-1.5'>
-                              <StatusDot tone={riskTone(risk)} />
-                              Risk {risk}
-                            </span>
-                          )}
-                          {network.flags.length === 0 && risk === null && (
-                            <span className='text-faint'>No signals</span>
-                          )}
-                        </span>
-                      </Row>
-                    )
-                  })}
-                </Panel>
+          },
+          {
+            id: 'flags',
+            header: 'Flags',
+            className: 'w-full text-secondary',
+            cell: (n) =>
+              n.flags.length === 0 ? (
+                <span className='text-faint'>—</span>
+              ) : (
+                n.flags.map((f) => flagLabels[f.flag]).join(', ')
               ),
-            },
-            {
-              id: 'dns',
-              weight: 3 + report.dns.resolvers.length * 2 + report.dns.notes.length * 2,
-              node: (
-                <Panel
-                  hint={
-                    dnsElsewhere ? (
-                      <InfoHint label='DNS resolves elsewhere'>
-                        <span className='grid max-w-72 gap-1'>
-                          <span className='font-medium text-foreground'>
-                            DNS leaves from {[...resolverCountries].join(', ')}
-                          </span>
-                          <span className='text-muted'>
-                            Traffic exits in {[...exitCountries].join(', ') || 'another country'},
-                            but names are resolved by servers elsewhere. Sites that log resolvers
-                            can see that location (a DNS leak).
-                          </span>
-                        </span>
-                      </InfoHint>
-                    ) : undefined
-                  }
-                  title='DNS resolvers'
-                >
-                  {report.dns.resolvers.length === 0 && (
-                    <Row label='Resolvers'>
-                      <span className='text-faint'>None identified</span>
-                    </Row>
-                  )}
-                  {report.dns.resolvers.map((resolver) => (
-                    <Row key={`${resolver.method}:${resolver.ip}`} label={resolver.method}>
-                      <span className='grid justify-items-end'>
-                        <span className={mono}>{resolver.ip}</span>
-                        <span className='text-[12px] text-muted'>
-                          {[
-                            resolver.asn ? `AS${resolver.asn}` : null,
-                            resolver.organization,
-                            resolver.city,
-                            resolver.countryCode,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ') || 'Unknown network'}
-                        </span>
-                        {resolver.note && (
-                          <span className='text-[12px] text-muted'>{resolver.note}</span>
-                        )}
-                      </span>
-                    </Row>
+            tooltip: (n) =>
+              n.flags.length === 0 ? null : (
+                <span className='grid gap-0.5'>
+                  {n.flags.map((f) => (
+                    <span key={f.flag}>
+                      {flagLabels[f.flag]}: <Sources names={f.sources} />
+                    </span>
                   ))}
-                  {report.dns.notes.map((note) => (
-                    <p className='pt-1 text-[12px] leading-5 text-muted select-text' key={note}>
-                      {note}
-                    </p>
-                  ))}
-                </Panel>
+                </span>
               ),
+          },
+          {
+            id: 'risk',
+            header: 'Risk',
+            className: 'text-right font-mono text-[12px]',
+            cell: (n) => {
+              if (n.risks.length === 0) return <span className='text-faint'>—</span>
+              const risk = Math.max(...n.risks.map((r) => r.risk))
+              return (
+                <span className='inline-flex items-center gap-1.5'>
+                  <StatusDot tone={riskTone(risk)} />
+                  {risk}
+                </span>
+              )
             },
-          ]}
-        />
-      </div>
+            tooltip: (n) =>
+              n.risks.length === 0 ? null : (
+                <span className='grid gap-0.5'>
+                  {n.risks.map((r) => (
+                    <span key={r.source}>
+                      {r.source}: {r.risk}
+                    </span>
+                  ))}
+                </span>
+              ),
+          },
+        ]}
+        empty={<span className='text-muted'>No source reported an address</span>}
+        getRowId={(n) => n.key}
+        label='Exit networks'
+        rows={networks}
+      />
 
-      <div
-        className={`flex h-10 items-center border-t border-b border-line text-[12.5px] font-medium ${gutter}`}
-      >
-        Sources
-      </div>
+      <SectionBar
+        hint={
+          dnsElsewhere ? (
+            <InfoHint label='DNS resolves elsewhere'>
+              <span className='grid max-w-72 gap-1'>
+                <span className='font-medium text-foreground'>
+                  DNS leaves from {[...resolverCountries].join(', ')}
+                </span>
+                <span className='text-muted'>
+                  Traffic exits in {[...exitCountries].join(', ') || 'another country'}, but names
+                  are resolved by servers elsewhere. Sites that log resolvers can see that location
+                  (a DNS leak).
+                </span>
+              </span>
+            </InfoHint>
+          ) : undefined
+        }
+        meta={resolverSummary(resolvers)}
+        title='DNS resolvers'
+      />
+      <DataTable
+        columns={[
+          {
+            id: 'network',
+            header: 'Network',
+            cell: (g) => (
+              <span className='flex items-baseline gap-2'>
+                <span className='font-medium text-foreground'>
+                  {g.organization ?? 'Unknown network'}
+                </span>
+                <span className='text-[12px] text-faint'>{networkMeta(g.asn, g.location)}</span>
+              </span>
+            ),
+          },
+          {
+            id: 'count',
+            header: 'Resolvers',
+            className: 'text-right text-secondary',
+            cell: (g) => g.resolvers.length,
+          },
+          {
+            id: 'addresses',
+            header: 'Addresses',
+            cell: (g) => <Addresses ips={g.resolvers.map((r) => r.ip)} />,
+            tooltip: (g) => addressList(g.resolvers.map((r) => r.ip)),
+          },
+          {
+            id: 'methods',
+            header: 'Found by',
+            className: 'w-full text-secondary',
+            cell: (g) =>
+              g.methods.map((m) => (m.count > 1 ? `${m.method} ×${m.count}` : m.method)).join(', '),
+          },
+          {
+            id: 'note',
+            header: 'Note',
+            className: 'text-muted',
+            cell: (g) => g.notes.join('; ') || '—',
+          },
+        ]}
+        empty={<span className='text-muted'>No resolver identified</span>}
+        getRowId={(g) => g.key}
+        label='DNS resolvers'
+        rows={resolvers}
+      />
+      {report.dns.notes.length > 0 && (
+        <div className={`grid gap-1 py-3 ${gutter}`}>
+          {report.dns.notes.map((note) => (
+            <p className='text-[12px] leading-5 text-muted select-text' key={note}>
+              {note}
+            </p>
+          ))}
+        </div>
+      )}
+
+      <SectionBar title='Sources' />
       <SourceTable failed={failed} networks={networks} />
     </>
   )

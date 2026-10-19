@@ -9,6 +9,7 @@ values out of the repository; they belong in a deployment's `config/netprobe.yam
   (`classify.ts`), run orchestration (`runner.ts`), SQLite store (`db.ts`), presets.
 - `src/shared/types.ts` — the API contract; the only types shared by server and web.
 - `src/shared/stun.ts` — public STUN servers used by both the host's probes and the browser check.
+- `src/shared/resolvers.ts` — groups DNS resolver observations by network for the Egress page.
 - `src/server/host.ts`, `src/server/identity.ts` — Host page snapshot and Egress page checks
   (third-party IP information sources, reputation lookups, DNS resolver identification).
 - `src/web` — React client (Base UI + Tailwind 4). Visual tokens live in `styles.css`.

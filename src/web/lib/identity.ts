@@ -127,3 +127,5 @@ export const typeLabel = (type: string) =>
     government: 'Government',
     vpn: 'VPN',
   })[type.toLowerCase()] ?? type
+
+export { type ResolverNetwork, resolverNetworks } from '../../shared/resolvers.ts'
