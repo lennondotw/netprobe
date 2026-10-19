@@ -1,5 +1,5 @@
 import type { ServiceInput } from '../config.ts'
-import { dot, ping, quic, site, stun, tcp, udpDns } from './helpers.ts'
+import { dot, ping, quic, site, stun, tcp, tlsHandshake, udpDns } from './helpers.ts'
 
 const category = 'Network'
 
@@ -132,6 +132,21 @@ export const network: ServiceInput[] = [
       quic('doq-adguard', 'DoQ AdGuard', 'dns.adguard-dns.com', 853),
       quic('doq-nextdns', 'DoQ NextDNS', 'dns.nextdns.io', 853),
       quic('doq-alidns', 'DoQ AliDNS', 'dns.alidns.com', 853),
+    ],
+  },
+  {
+    id: 'tls',
+    category: 'Network',
+    name: 'TLS handshakes',
+    description:
+      'Node’s default handshake (post-quantum key share, ~1.6 KB ClientHello) against a classic one (~400 bytes). Failures only on the large one point at a proxy or middlebox on the path.',
+    targets: [
+      tlsHandshake('cloudflare-pq', 'Cloudflare, default', 'www.cloudflare.com', 'pq'),
+      tlsHandshake('cloudflare-classic', 'Cloudflare, classic', 'www.cloudflare.com', 'classic'),
+      tlsHandshake('github-pq', 'GitHub, default', 'github.com', 'pq'),
+      tlsHandshake('github-classic', 'GitHub, classic', 'github.com', 'classic'),
+      tlsHandshake('npm-pq', 'npm registry, default', 'registry.npmjs.org', 'pq'),
+      tlsHandshake('npm-classic', 'npm registry, classic', 'registry.npmjs.org', 'classic'),
     ],
   },
   {

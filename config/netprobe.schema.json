@@ -249,6 +249,7 @@
               "udp",
               "dns-plain",
               "dns-encrypted",
+              "tls",
               "speed",
               "apple",
               "microsoft",
@@ -315,6 +316,12 @@
               "dns-encrypted.doq-adguard",
               "dns-encrypted.doq-nextdns",
               "dns-encrypted.doq-alidns",
+              "tls.cloudflare-pq",
+              "tls.cloudflare-classic",
+              "tls.github-pq",
+              "tls.github-classic",
+              "tls.npm-pq",
+              "tls.npm-classic",
               "speed.cloudflare-10mb",
               "speed.cachefly-10mb",
               "speed.ovh-10mb",
@@ -581,6 +588,7 @@
                   "udp",
                   "dns-plain",
                   "dns-encrypted",
+                  "tls",
                   "speed",
                   "apple",
                   "microsoft",
@@ -655,7 +663,7 @@
                 {
                   "type": "string",
                   "format": "uri",
-                  "description": "What to probe; the scheme picks the probe.\nhttp(s)://… — through curl, with DNS/TCP/TLS/TTFB timings and a status check.\nicmp://host — ping.\ntcp://host:port — TCP connect.\ndns://server[:port]?name=example.com&type=A — one DNS query over UDP.\ndot://server[:port]?name=example.com&sni=host — DNS over TLS.\nstun://host[:port] — STUN binding; reports the public UDP address.\nquic://host[:port] — QUIC version negotiation (HTTP/3, DoQ reachability)."
+                  "description": "What to probe; the scheme picks the probe.\nhttp(s)://… — through curl, with DNS/TCP/TLS/TTFB timings and a status check.\nicmp://host — ping.\ntcp://host:port — TCP connect.\ndns://server[:port]?name=example.com&type=A — one DNS query over UDP.\ndot://server[:port]?name=example.com&sni=host — DNS over TLS.\ntls://host[:port]?groups=X25519:P-256&version=1.3 — a TLS handshake by Node (OpenSSL 3.5). Default groups include the post-quantum X25519MLKEM768 key share (a ~1.6 KB ClientHello); groups and version narrow it.\nstun://host[:port] — STUN binding; reports the public UDP address.\nquic://host[:port] — QUIC version negotiation (HTTP/3, DoQ reachability)."
                 },
                 {
                   "type": "object",
@@ -673,7 +681,7 @@
                     "url": {
                       "type": "string",
                       "format": "uri",
-                      "description": "What to probe; the scheme picks the probe.\nhttp(s)://… — through curl, with DNS/TCP/TLS/TTFB timings and a status check.\nicmp://host — ping.\ntcp://host:port — TCP connect.\ndns://server[:port]?name=example.com&type=A — one DNS query over UDP.\ndot://server[:port]?name=example.com&sni=host — DNS over TLS.\nstun://host[:port] — STUN binding; reports the public UDP address.\nquic://host[:port] — QUIC version negotiation (HTTP/3, DoQ reachability)."
+                      "description": "What to probe; the scheme picks the probe.\nhttp(s)://… — through curl, with DNS/TCP/TLS/TTFB timings and a status check.\nicmp://host — ping.\ntcp://host:port — TCP connect.\ndns://server[:port]?name=example.com&type=A — one DNS query over UDP.\ndot://server[:port]?name=example.com&sni=host — DNS over TLS.\ntls://host[:port]?groups=X25519:P-256&version=1.3 — a TLS handshake by Node (OpenSSL 3.5). Default groups include the post-quantum X25519MLKEM768 key share (a ~1.6 KB ClientHello); groups and version narrow it.\nstun://host[:port] — STUN binding; reports the public UDP address.\nquic://host[:port] — QUIC version negotiation (HTTP/3, DoQ reachability)."
                     },
                     "method": {
                       "default": "GET",

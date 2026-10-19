@@ -107,6 +107,36 @@ describe('socket probes', () => {
     expect(attempt).toMatchObject({ outcome: 'failed', errorKind: 'connect_refused', phase: 'tcp' })
   })
 
+  it('attributes a reset during the TLS handshake to the TLS phase', async () => {
+    const server = createServer((socket) => socket.once('data', () => socket.resetAndDestroy()))
+    await new Promise<void>((done) => server.listen(0, '127.0.0.1', done))
+    const port = (server.address() as AddressInfo).port
+    const attempt = await runSocketProbe('tls', `tls://127.0.0.1:${port}`, context())
+    server.close()
+    expect(attempt).toMatchObject({ outcome: 'failed', errorKind: 'reset', phase: 'tls' })
+    expect(attempt.phases.tcp).not.toBeNull()
+  })
+
+  it('offers the large post-quantum ClientHello by default and a small one with groups', async () => {
+    // Collect what the client sends before answering, then hang up: the ClientHello size.
+    const sizes: number[] = []
+    const server = createServer((socket) => {
+      let bytes = 0
+      socket.on('data', (chunk: Buffer) => (bytes += chunk.length))
+      setTimeout(() => {
+        sizes.push(bytes)
+        socket.resetAndDestroy()
+      }, 150)
+    })
+    await new Promise<void>((done) => server.listen(0, '127.0.0.1', done))
+    const port = (server.address() as AddressInfo).port
+    await runSocketProbe('tls', `tls://127.0.0.1:${port}`, context())
+    await runSocketProbe('tls', `tls://127.0.0.1:${port}?groups=X25519:P-256`, context())
+    server.close()
+    expect(sizes[0]).toBeGreaterThan(1200)
+    expect(sizes[1]).toBeLessThan(600)
+  })
+
   it('resolves a name over UDP DNS', async () => {
     const attempt = await runSocketProbe(
       'dns',

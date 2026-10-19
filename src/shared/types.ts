@@ -33,12 +33,16 @@ export type ErrorKind =
  * - `tcp`: `tcp://host:port`, a bare TCP connect.
  * - `dns`: `dns://server[:port]?name=…&type=A|AAAA`, one query over UDP.
  * - `dot`: `dot://server[:port]?name=…&sni=…`, the same query over TLS (DNS over TLS).
+ * - `tls`: `tls://host[:port]?groups=…&version=1.2|1.3&sni=…`, a TLS handshake made by Node's own
+ *   OpenSSL. By default it offers the post-quantum hybrid key share (a ClientHello of about 1.6 KB),
+ *   which some middleboxes and transparent proxies mishandle; `groups=X25519:P-256` sends the small
+ *   classic one for comparison.
  * - `stun`: `stun://host[:port]`, a STUN binding request that reports the public mapped address.
  * - `quic`: `quic://host[:port]`, a QUIC version-negotiation exchange: proves UDP/QUIC reachability
  *   and measures round-trip time without a full handshake.
  * - `icmp`: `icmp://host`, echo requests through the system `ping`.
  */
-export type ProbeKind = 'http' | 'tcp' | 'dns' | 'dot' | 'stun' | 'quic' | 'icmp'
+export type ProbeKind = 'http' | 'tcp' | 'dns' | 'dot' | 'tls' | 'stun' | 'quic' | 'icmp'
 
 /** An exact status code, or any code in a class. */
 export type StatusMatcher = number | '2xx' | '3xx' | '4xx' | '5xx'

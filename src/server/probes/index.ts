@@ -29,6 +29,7 @@ import {
 const defaultPorts: Partial<Record<ProbeKind, number>> = {
   dns: 53,
   dot: 853,
+  tls: 443,
   stun: 3478,
   quic: 443,
 }
@@ -275,6 +276,55 @@ const quicProbe = (endpoint: Endpoint, context: ProbeContext) =>
   })
 
 /** Run one attempt of a socket-level probe. */
+const tlsVersions = { '1.2': 'TLSv1.2', '1.3': 'TLSv1.3' } as const
+
+/**
+ * A TLS handshake made by Node's own OpenSSL, the way Node tools (npm, pnpm, Vercel, actions)
+ * connect. Without `groups` it offers OpenSSL 3.5's default key shares, including the
+ * post-quantum hybrid X25519MLKEM768, so the ClientHello is about 1.6 KB and spans several TCP
+ * segments; some transparent proxies and middleboxes reset such handshakes. `groups` (an OpenSSL
+ * group list such as `X25519:P-256`) and `version` (`1.2` or `1.3`) narrow the offer.
+ */
+const tlsProbe = (endpoint: Endpoint, context: ProbeContext) =>
+  attempt(context, async (timings, started, track, remote, onCleanup) => {
+    const target = await lookupStep(endpoint, context, timings, started, remote)
+    track('tcp')
+    return new Promise<string>((done, fail) => {
+      const servername = endpoint.params.get('sni') ?? (target.resolved ? endpoint.host : undefined)
+      const groups = endpoint.params.get('groups')
+      const version = tlsVersions[endpoint.params.get('version') as keyof typeof tlsVersions]
+      const raw: Socket = connectTcp({
+        host: target.address,
+        port: endpoint.port,
+        family: target.family,
+        localAddress: localAddressFor(context, target.family),
+      })
+      const socket: TLSSocket = connectTls({
+        socket: raw,
+        host: target.address,
+        servername,
+        ...(groups ? { ecdhCurve: groups } : {}),
+        ...(version ? { minVersion: version, maxVersion: version } : {}),
+      })
+      onCleanup(() => {
+        socket.destroy()
+        raw.destroy()
+      })
+      raw.once('connect', () => {
+        timings.connect = now() - started
+        track('tls')
+      })
+      raw.once('error', fail)
+      socket.once('secureConnect', () => {
+        timings.tls = now() - started
+        const key = socket.getEphemeralKeyInfo()
+        const group = key && 'name' in key ? key.name : null
+        done([socket.getProtocol(), group].filter(Boolean).join(' · '))
+      })
+      socket.once('error', fail)
+    })
+  })
+
 export const runSocketProbe = (
   kind: ProbeKind,
   url: string,
@@ -286,6 +336,8 @@ export const runSocketProbe = (
       return tcpProbe(endpoint, context)
     case 'dot':
       return dotProbe(endpoint, context)
+    case 'tls':
+      return tlsProbe(endpoint, context)
     case 'dns':
       return dnsProbe(endpoint, context)
     case 'stun':

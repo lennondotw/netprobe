@@ -32,6 +32,7 @@ const schemeKinds: Record<string, ProbeKind> = {
   'tcp:': 'tcp',
   'dns:': 'dns',
   'dot:': 'dot',
+  'tls:': 'tls',
   'stun:': 'stun',
   'quic:': 'quic',
   'icmp:': 'icmp',
@@ -40,7 +41,7 @@ const schemeKinds: Record<string, ProbeKind> = {
 export const kindOf = (url: string): ProbeKind => schemeKinds[new URL(url).protocol] ?? 'http'
 
 const targetUrl = z
-  .url({ protocol: /^(https?|tcp|dns|dot|stun|quic|icmp)$/ })
+  .url({ protocol: /^(https?|tcp|dns|dot|tls|stun|quic|icmp)$/ })
   .describe(
     [
       'What to probe; the scheme picks the probe.',
@@ -49,6 +50,7 @@ const targetUrl = z
       'tcp://host:port — TCP connect.',
       'dns://server[:port]?name=example.com&type=A — one DNS query over UDP.',
       'dot://server[:port]?name=example.com&sni=host — DNS over TLS.',
+      'tls://host[:port]?groups=X25519:P-256&version=1.3 — a TLS handshake by Node (OpenSSL 3.5). Default groups include the post-quantum X25519MLKEM768 key share (a ~1.6 KB ClientHello); groups and version narrow it.',
       'stun://host[:port] — STUN binding; reports the public UDP address.',
       'quic://host[:port] — QUIC version negotiation (HTTP/3, DoQ reachability).',
     ].join('\n'),

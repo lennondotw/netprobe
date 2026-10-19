@@ -114,6 +114,7 @@ const kindLabel: Record<ProbeKind, string> = {
   tcp: 'TCP',
   dns: 'DNS',
   dot: 'DoT',
+  tls: 'TLS',
   stun: 'STUN',
   quic: 'QUIC',
   icmp: 'ICMP',
@@ -538,6 +539,8 @@ const checkDescription = (target: TargetInfo) => {
       return 'One DNS query over UDP; the answer is shown as the detail'
     case 'dot':
       return 'DNS query over TLS (port 853)'
+    case 'tls':
+      return 'TLS handshake by Node’s OpenSSL; the detail shows the protocol and key exchange group'
     case 'stun':
       return 'STUN binding request; reports the public address UDP leaves from'
     case 'quic':

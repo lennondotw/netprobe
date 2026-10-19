@@ -42,19 +42,19 @@ an office gateway.
 
 ### Built-in targets
 
-| Category       | Services                                                                                    |
-| -------------- | ------------------------------------------------------------------------------------------- |
-| Network        | ICMP/TCP latency baseline, captive-portal checks, STUN and QUIC (UDP), speed-test nodes     |
-| DNS            | Plain DNS over UDP to public resolvers; DoT, DoH, DoH3, and DoQ                             |
-| Platforms      | Apple, Microsoft, Google, Cloudflare                                                        |
-| AI             | OpenAI, Anthropic, Google AI, xAI, other and China model providers, inference, coding tools |
-| Developer      | GitHub (web, API, storage, Packages, Pages), GitHub Actions, other forges, notarization     |
-| Packages       | npm, language registries, container registries, package CDNs, toolchains and SDKs           |
-| Mirrors        | Default Linux software sources; mirrors and registry proxies used in mainland China         |
-| Cloud          | AWS, Vercel                                                                                 |
-| Tailscale      | Control plane and DERP relays (HTTPS and STUN) in nine regions                              |
-| Social & tools | Social and messaging sites; collaboration tools                                             |
-| Regional       | Mainland China sites                                                                        |
+| Category       | Services                                                                                                |
+| -------------- | ------------------------------------------------------------------------------------------------------- |
+| Network        | ICMP/TCP latency baseline, captive-portal checks, STUN and QUIC (UDP), TLS handshakes, speed-test nodes |
+| DNS            | Plain DNS over UDP to public resolvers; DoT, DoH, DoH3, and DoQ                                         |
+| Platforms      | Apple, Microsoft, Google, Cloudflare                                                                    |
+| AI             | OpenAI, Anthropic, Google AI, xAI, other and China model providers, inference, coding tools             |
+| Developer      | GitHub (web, API, storage, Packages, Pages), GitHub Actions, other forges, notarization                 |
+| Packages       | npm, language registries, container registries, package CDNs, toolchains and SDKs                       |
+| Mirrors        | Default Linux software sources; mirrors and registry proxies used in mainland China                     |
+| Cloud          | AWS, Vercel                                                                                             |
+| Tailscale      | Control plane and DERP relays (HTTPS and STUN) in nine regions                                          |
+| Social & tools | Social and messaging sites; collaboration tools                                                         |
+| Regional       | Mainland China sites                                                                                    |
 
 Each service can be run on its own from its group header, or a whole category from the toolbar.
 
@@ -64,15 +64,16 @@ same edge without the check.
 
 ### Probe types
 
-| Scheme    | Measures                                                                                             |
-| --------- | ---------------------------------------------------------------------------------------------------- |
-| `http(s)` | Through curl: DNS, TCP, TLS, time to first byte, total; status checked against the target            |
-| `icmp`    | Echo round trips through the system `ping`; loss and jitter                                          |
-| `tcp`     | Connect time                                                                                         |
-| `dns`     | One query over UDP; the answer is recorded, so hijacked DNS shows up                                 |
-| `dot`     | The same query over TLS, with connect and handshake timed separately                                 |
-| `stun`    | Binding request; records the public address UDP traffic leaves from                                  |
-| `quic`    | Version negotiation: proves a QUIC endpoint (HTTP/3, DoQ) is reachable over UDP, without a handshake |
+| Scheme    | Measures                                                                                                                                                      |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `http(s)` | Through curl: DNS, TCP, TLS, time to first byte, total; status checked against the target                                                                     |
+| `icmp`    | Echo round trips through the system `ping`; loss and jitter                                                                                                   |
+| `tcp`     | Connect time                                                                                                                                                  |
+| `dns`     | One query over UDP; the answer is recorded, so hijacked DNS shows up                                                                                          |
+| `dot`     | The same query over TLS, with connect and handshake timed separately                                                                                          |
+| `stun`    | Binding request; records the public address UDP traffic leaves from                                                                                           |
+| `quic`    | Version negotiation: proves a QUIC endpoint (HTTP/3, DoQ) is reachable over UDP, without a handshake                                                          |
+| `tls`     | A TLS handshake by Node's OpenSSL, default (post-quantum key share, ~1.6 KB ClientHello) or `?groups=` / `?version=`; shows the negotiated protocol and group |
 
 Socket-level probes cannot go through an HTTP or SOCKS proxy, so proxy exits run HTTP targets only.
 Jitter is the mean absolute difference between consecutive round trips.
