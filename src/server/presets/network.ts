@@ -1,3 +1,4 @@
+import { publicStunServers } from '../../shared/stun.ts'
 import type { ServiceInput } from '../config.ts'
 import { dot, ping, quic, site, stun, tcp, udpDns } from './helpers.ts'
 
@@ -79,6 +80,17 @@ export const network: ServiceInput[] = [
       quic('quic-cloudflare', 'QUIC Cloudflare (HTTP/3)', 'www.cloudflare.com'),
       quic('quic-google', 'QUIC Google (HTTP/3)', 'www.google.com'),
     ],
+  },
+  {
+    id: 'stun',
+    name: 'Public STUN servers',
+    category,
+    description:
+      'More STUN servers around the world. With split routing, each can see a different public address.',
+    targets: publicStunServers
+      // The three in "UDP, NAT & QUIC" already cover these.
+      .filter((s) => !['google', 'cloudflare', 'twilio'].includes(s.id))
+      .map((s) => stun(s.id, s.name, s.host, s.port)),
   },
   {
     id: 'dns-plain',

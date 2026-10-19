@@ -43,23 +43,24 @@ an office gateway.
   where the host's traffic comes from, groups their answers by network (so split routing through
   a rule-based proxy is visible), looks up each exit address's type and reputation, and identifies
   the DNS resolvers queries actually reach. A separate section checks the viewing browser's public
-  address and WebRTC candidates.
+  address and WebRTC candidates, asking 20 public STUN servers separately so it shows which ones
+  see which address.
 
 ### Built-in targets
 
-| Category       | Services                                                                                    |
-| -------------- | ------------------------------------------------------------------------------------------- |
-| Network        | ICMP/TCP latency baseline, captive-portal checks, STUN and QUIC (UDP), speed-test nodes     |
-| DNS            | Plain DNS over UDP to public resolvers; DoT, DoH, DoH3, and DoQ                             |
-| Platforms      | Apple, Microsoft, Google, Cloudflare                                                        |
-| AI             | OpenAI, Anthropic, Google AI, xAI, other and China model providers, inference, coding tools |
-| Developer      | GitHub (web, API, storage, Packages, Pages), GitHub Actions, other forges, notarization     |
-| Packages       | npm, language registries, container registries, package CDNs, toolchains and SDKs           |
-| Mirrors        | Default Linux software sources; mirrors and registry proxies used in mainland China         |
-| Cloud          | AWS, Vercel                                                                                 |
-| Tailscale      | Control plane and DERP relays (HTTPS and STUN) in nine regions                              |
-| Social & tools | Social and messaging sites; collaboration tools                                             |
-| Regional       | Mainland China sites                                                                        |
+| Category       | Services                                                                                              |
+| -------------- | ----------------------------------------------------------------------------------------------------- |
+| Network        | ICMP/TCP latency baseline, captive-portal checks, STUN (20 public servers) and QUIC, speed-test nodes |
+| DNS            | Plain DNS over UDP to public resolvers; DoT, DoH, DoH3, and DoQ                                       |
+| Platforms      | Apple, Microsoft, Google, Cloudflare                                                                  |
+| AI             | OpenAI, Anthropic, Google AI, xAI, other and China model providers, inference, coding tools           |
+| Developer      | GitHub (web, API, storage, Packages, Pages), GitHub Actions, other forges, notarization               |
+| Packages       | npm, language registries, container registries, package CDNs, toolchains and SDKs                     |
+| Mirrors        | Default Linux software sources; mirrors and registry proxies used in mainland China                   |
+| Cloud          | AWS, Vercel                                                                                           |
+| Tailscale      | Control plane and DERP relays (HTTPS and STUN) in nine regions                                        |
+| Social & tools | Social and messaging sites; collaboration tools                                                       |
+| Regional       | Mainland China sites                                                                                  |
 
 Each service can be run on its own from its group header, or a whole category from the toolbar.
 

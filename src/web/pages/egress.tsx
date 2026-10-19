@@ -626,6 +626,12 @@ const BrowserSection = ({
                           <Badge tone='success'>No extra public address</Badge>
                         )}
                       </Row>
+                      {result.webrtc.stun.length > 0 && (
+                        <Row label='STUN servers'>
+                          {result.webrtc.stun.filter((s) => s.answered).length} of{' '}
+                          {result.webrtc.stun.length} answered
+                        </Row>
+                      )}
                       <Row label='Local addresses'>
                         {exposedLocal.length > 0 ? (
                           <span className={mono}>
@@ -674,6 +680,19 @@ const BrowserSection = ({
                   header: 'Protocol',
                   className: 'uppercase text-muted',
                   cell: (c) => c.protocol,
+                },
+                {
+                  id: 'servers',
+                  header: 'Seen by',
+                  className: 'text-muted',
+                  cell: (c) =>
+                    c.servers.length === 0
+                      ? '—'
+                      : c.servers.length <= 3
+                        ? c.servers.join(', ')
+                        : `${c.servers.slice(0, 3).join(', ')} +${c.servers.length - 3}`,
+                  tooltip: (c) =>
+                    c.servers.length > 3 ? <span>Seen by {c.servers.join(', ')}</span> : null,
                 },
                 {
                   id: 'note',
