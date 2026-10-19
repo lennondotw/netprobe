@@ -295,7 +295,13 @@ const configSchema = z
       .array(exitSchema)
       .min(1)
       .default([{ id: 'direct', name: 'Direct' }])
-      .describe('Network exits to compare. The first is the default.'),
+      .describe(
+        'Network exits to compare. The first is the default unless defaultExit names another.',
+      ),
+    defaultExit: z
+      .string()
+      .optional()
+      .describe('Id of the exit runs and the Egress page start with. Default: the first exit.'),
     presets: z
       .strictObject({
         enabled: z
@@ -367,6 +373,8 @@ export interface ResolvedConfig {
   ipFamily: IpFamily
   publicIpCheckUrl: string
   egress: ResolvedEgress[]
+  /** The exit runs start with. */
+  defaultEgressId: string
   services: (Omit<ServiceInfo, 'targets'> & { targets: ResolvedTarget[] })[]
   targets: Map<string, ResolvedTarget>
 }
@@ -566,6 +574,16 @@ export const resolveConfig = (input: unknown): ResolvedConfig => {
     }))
     .filter((service) => service.targets.length > 0)
 
+  if (config.defaultExit && !config.exits.some((e) => e.id === config.defaultExit)) {
+    issue(
+      ['defaultExit'],
+      `"${config.defaultExit}" is not an exit${suggestion(
+        config.defaultExit,
+        config.exits.map((e) => e.id),
+      )}`,
+    )
+  }
+
   config.exits.forEach((exit, index) => {
     const routes = [exit.proxy, exit.interface, exit.gateway].filter(Boolean).length
     if (routes > 1) {
@@ -591,6 +609,7 @@ export const resolveConfig = (input: unknown): ResolvedConfig => {
     download: config.download,
     ipFamily: config.ipFamily,
     publicIpCheckUrl: config.publicIpCheckUrl,
+    defaultEgressId: config.defaultExit ?? config.exits[0]!.id,
     egress: config.exits.map((exit): ResolvedEgress => {
       const proxy = exit.proxy ? redactProxy(exit.proxy) : null
       const kind = exit.proxy

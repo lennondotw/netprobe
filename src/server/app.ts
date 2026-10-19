@@ -68,7 +68,7 @@ export const buildApp = async ({ config, store, runner, runtime, webRoot, logger
     defaults: {
       repeats: config.probe.repeats,
       ipFamily: config.ipFamily,
-      egressId: config.egress[0]!.id,
+      egressId: config.defaultEgressId,
     },
     limits: { maxRepeats: 20, downloadConnections: config.download.connections },
     runtime,

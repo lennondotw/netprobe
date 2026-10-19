@@ -33,6 +33,19 @@ describe('exits', () => {
     expect(() => exits([exit])).toThrow(fragment)
   })
 
+  it('starts runs on the configured default exit, or the first one', () => {
+    const list = [
+      { id: 'direct', name: 'Direct' },
+      { id: 'router', name: 'Router', gateway: '10.0.0.240' },
+    ]
+    const base = { presets: { enabled: false }, exits: list }
+    expect(resolveConfig(base).defaultEgressId).toBe('direct')
+    expect(resolveConfig({ ...base, defaultExit: 'router' }).defaultEgressId).toBe('router')
+    expect(() => resolveConfig({ ...base, defaultExit: 'routr' })).toThrow(
+      'is not an exit; did you mean',
+    )
+  })
+
   it('runs socket probes on routed exits but not through a proxy', () => {
     const [gateway, proxy] = exits([
       { id: 'router', name: 'Router', gateway: '10.0.0.240' },

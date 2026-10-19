@@ -172,7 +172,7 @@
           "name": "Direct"
         }
       ],
-      "description": "Network exits to compare. The first is the default.",
+      "description": "Network exits to compare. The first is the default unless defaultExit names another.",
       "minItems": 1,
       "type": "array",
       "items": {
@@ -227,6 +227,10 @@
         "additionalProperties": false,
         "description": "A network exit runs can be sent through. Without proxy, interface, or gateway it uses the system routing."
       }
+    },
+    "defaultExit": {
+      "description": "Id of the exit runs and the Egress page start with. Default: the first exit.",
+      "type": "string"
     },
     "presets": {
       "description": "The built-in services.",

@@ -33,6 +33,7 @@ download:
 ipFamily: auto # auto | ipv4 | ipv6 — default for runs; each run can override it
 
 # Network exits to compare; the first is the default. Proxy credentials never reach the UI or logs.
+# defaultExit: side-router # the exit runs start with; default: the first one
 exits:
   - id: direct
     name: Direct

@@ -218,7 +218,7 @@ services:
 
 ### Exits
 
-Exits are listed under `exits`; the first is the default, and each run can pick another.
+Exits are listed under `exits`. Runs start with the first, or the one `defaultExit` names, and each run can pick another.
 
 | Key                   | Traffic                                                                                       | Probes          |
 | --------------------- | --------------------------------------------------------------------------------------------- | --------------- |
