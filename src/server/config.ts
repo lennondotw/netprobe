@@ -316,7 +316,9 @@ const configSchema = z
     services: z
       .array(serviceSchema)
       .default([])
-      .describe('Services to add, or to extend built-in services by reusing their id.'),
+      .describe(
+        'Services to add, or to extend built-in services by reusing their id. Added services are listed before the built-in ones.',
+      ),
   })
   .describe('Netprobe configuration.')
 
@@ -544,7 +546,13 @@ export const resolveConfig = (input: unknown): ResolvedConfig => {
           : config.modules.egress,
   }
 
-  const services = [...merged]
+  // Services the config adds come first: a deployment's own targets matter most to its viewers.
+  const builtIn = new Set(presets.map((p) => p.id))
+  const ordered = [
+    ...[...merged].filter(([id]) => !builtIn.has(id)),
+    ...[...merged].filter(([id]) => builtIn.has(id)),
+  ]
+  const services = ordered
     .map(([serviceId, service]) => ({
       id: serviceId,
       name: service.name,

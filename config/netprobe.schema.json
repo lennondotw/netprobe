@@ -566,7 +566,7 @@
     },
     "services": {
       "default": [],
-      "description": "Services to add, or to extend built-in services by reusing their id.",
+      "description": "Services to add, or to extend built-in services by reusing their id. Added services are listed before the built-in ones.",
       "type": "array",
       "items": {
         "type": "object",

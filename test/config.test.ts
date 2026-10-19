@@ -101,6 +101,18 @@ describe('config', () => {
     })
   })
 
+  it('lists services the config adds before the built-in ones', () => {
+    const config = resolveConfig({
+      services: [
+        { id: 'internal', category: 'Internal', targets: ['https://wiki.internal/'] },
+        { id: 'github', targets: [{ id: 'extra', url: 'https://github.com/features' }] },
+      ],
+    })
+    expect(config.services[0]?.id).toBe('internal')
+    // Extending a built-in service keeps it in its built-in place.
+    expect(config.services.findIndex((s) => s.id === 'github')).toBeGreaterThan(1)
+  })
+
   it('never exposes proxy credentials in the public exit list', () => {
     const config = resolveConfig({
       exits: [{ id: 'proxy', name: 'Proxy', proxy: 'http://user:pw@proxy.local:8080' }],
