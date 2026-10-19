@@ -89,3 +89,21 @@ export const quic = (
   url: `quic://${host}:${port}`,
   note,
 })
+
+/**
+ * A web app behind Cloudflare's bot check, which answers 403 to every non-browser client. The
+ * site's own `/cdn-cgi/trace` crosses the same edge without the check, so it stands in for the
+ * page: a 200 proves the path, and the trace shows the address the site saw.
+ */
+export const edge = (
+  id: string,
+  name: string,
+  host: string,
+  extra: Partial<Target> = {},
+): Target => ({
+  id,
+  name,
+  url: `https://${host}/cdn-cgi/trace`,
+  note: 'Cloudflare challenges non-browser clients on the page itself; its edge trace answers.',
+  ...extra,
+})

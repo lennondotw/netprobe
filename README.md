@@ -22,8 +22,12 @@ an office gateway.
 - **Which targets are slow or flaky?** Every target is probed several times; the table shows
   per-phase medians, a request waterfall, and how many attempts succeeded. One failure in five
   shows as _Intermittent_, never as healthy.
-- **How fast is the download path?** Download targets are measured over one connection and
-  over several range-split connections, reported in Mbps and MB/s with the bytes received.
+- **Which address does each site see?** For every site behind Cloudflare, the server reads
+  that site's own `/cdn-cgi/trace` over the same exit and shows the address the site saw in an
+  _Exit IP_ column. Rule-based proxies route per domain, so this can differ from site to site.
+- **How fast is the download path?** Optional (off by default, since every viewer could start
+  one): a few small files on speed-test hosts, over one connection and over several range-split
+  connections, reported in Mbps and MB/s with the bytes received.
 - **Does the exit matter?** Exits can be HTTP/SOCKS proxies, another network interface, or a
   gateway such as a LAN side router (routed at the network layer, no proxy settings), and every
   run records the public IP it left from.
@@ -37,16 +41,19 @@ an office gateway.
 
 ### Built-in targets
 
-| Category       | Services                                                                                   |
-| -------------- | ------------------------------------------------------------------------------------------ |
-| Network        | ICMP/TCP latency baseline, captive-portal checks, STUN and QUIC (UDP), a download baseline |
-| DNS            | Plain DNS over UDP to public resolvers; DoT, DoH, DoH3, and DoQ                            |
-| Platforms      | Apple, Microsoft, Google, Cloudflare                                                       |
-| Developer      | GitHub, GitHub Actions, package registries, code hosting and AI APIs, notarization, npm    |
-| Cloud          | AWS, Vercel                                                                                |
-| Tailscale      | Control plane and DERP relays (HTTPS and STUN) in nine regions                             |
-| Social & tools | Social and messaging sites; collaboration tools                                            |
-| Regional       | Mainland China sites and mirrors                                                           |
+| Category       | Services                                                                                    |
+| -------------- | ------------------------------------------------------------------------------------------- |
+| Network        | ICMP/TCP latency baseline, captive-portal checks, STUN and QUIC (UDP), speed-test nodes     |
+| DNS            | Plain DNS over UDP to public resolvers; DoT, DoH, DoH3, and DoQ                             |
+| Platforms      | Apple, Microsoft, Google, Cloudflare                                                        |
+| AI             | OpenAI, Anthropic, Google AI, xAI, other and China model providers, inference, coding tools |
+| Developer      | GitHub (web, API, storage, Packages, Pages), GitHub Actions, other forges, notarization     |
+| Packages       | npm, language registries, container registries, package CDNs, toolchains and SDKs           |
+| Mirrors        | Default Linux software sources; mirrors and registry proxies used in mainland China         |
+| Cloud          | AWS, Vercel                                                                                 |
+| Tailscale      | Control plane and DERP relays (HTTPS and STUN) in nine regions                              |
+| Social & tools | Social and messaging sites; collaboration tools                                             |
+| Regional       | Mainland China sites                                                                        |
 
 Each service can be run on its own from its group header, or a whole category from the toolbar.
 
@@ -152,7 +159,7 @@ of every key and built-in id, hover documentation, and validation as you type.
 ```yaml
 # yaml-language-server: $schema=./netprobe.schema.json
 modules:
-  downloads: false # no throughput tests on this link
+  downloads: true # throughput tests against speed-test hosts (off by default)
   host: true
   egress:
     excludeSources: [ip-api] # skip one third-party service
@@ -188,7 +195,7 @@ services:
 
 | Module      | Turn off when                                                                       |
 | ----------- | ----------------------------------------------------------------------------------- |
-| `downloads` | The link is metered or shared: throughput tests transfer real data.                 |
+| `downloads` | Off by default. Turn on where viewers may spend about 50 MB per download run.       |
 | `host`      | Others on the network should not see this machine's interfaces, routes, and DNS.    |
 | `egress`    | The host must not contact third-party IP information services. Or tune its sources. |
 

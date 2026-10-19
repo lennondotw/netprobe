@@ -134,4 +134,32 @@ export const network: ServiceInput[] = [
       quic('doq-alidns', 'DoQ AliDNS', 'dns.alidns.com', 853),
     ],
   },
+  {
+    id: 'speed',
+    category: 'Network',
+    name: 'Speed test nodes',
+    description:
+      'Small files on hosts meant for speed tests, so a download run costs about 50 MB in total.',
+    targets: [
+      {
+        id: 'cloudflare-10mb',
+        name: 'Cloudflare 10 MB',
+        url: 'https://speed.cloudflare.com/__down?bytes=10000000',
+        download: { bytes: 10000000, parallel: 'none' },
+        note: 'Does not support range requests, so there is no multi-connection measurement.',
+      },
+      {
+        id: 'cachefly-10mb',
+        name: 'CacheFly 10 MB',
+        url: 'https://cachefly.cachefly.net/10mb.test',
+        download: { bytes: 10485760, parallel: 'range' },
+      },
+      {
+        id: 'ovh-10mb',
+        name: 'OVH 10 MB (France)',
+        url: 'https://proof.ovh.net/files/10Mb.dat',
+        download: { bytes: 10485760, parallel: 'range' },
+      },
+    ],
+  },
 ]

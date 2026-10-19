@@ -32,7 +32,7 @@ describe('config', () => {
     expect(config.egress).toMatchObject([
       { id: 'direct', name: 'Direct', kind: 'direct', proxy: null },
     ])
-    expect(config.modules).toMatchObject({ downloads: true, host: true })
+    expect(config.modules).toMatchObject({ downloads: false, host: true })
     expect(config.modules.egress).toMatchObject({ reputation: true, dnsLeakTest: true })
   })
 

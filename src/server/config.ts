@@ -202,9 +202,9 @@ const configSchema = z
       .strictObject({
         downloads: z
           .boolean()
-          .default(true)
+          .default(false)
           .describe(
-            'Download throughput tests. They transfer real data; disable on metered links.',
+            'Download throughput tests against a few speed-test hosts (about 50 MB per run). Off by default: every viewer could start one, and they use the host’s bandwidth.',
           ),
         host: z
           .boolean()

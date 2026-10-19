@@ -9,7 +9,7 @@
 
 # Optional parts of Netprobe.
 modules:
-  downloads: true # throughput tests transfer real data; turn off on metered links
+  downloads: false # throughput tests: about 50 MB per run against speed-test hosts
   host: true # Host page: system, interfaces, routes, DNS, proxies — visible on the LAN
   # Egress page: asks third-party services about this host's public addresses.
   # Use true / false, or settings:

@@ -50,19 +50,13 @@ export const platforms: ServiceInput[] = [
     id: 'google',
     name: 'Google',
     category: 'Platforms',
-    description: 'Search, accounts, Gmail, Fonts, and Cloud Storage.',
+    description: 'Search, accounts, Gmail, Fonts, and Cloud Storage. Gemini is under AI.',
     targets: [
       site('web', 'google.com', 'https://www.google.com/'),
       site('accounts', 'Accounts', 'https://accounts.google.com/'),
       site('gmail', 'Gmail', 'https://mail.google.com/'),
       { id: 'fonts', name: 'Fonts API', url: 'https://fonts.googleapis.com/css2?family=Inter' },
       reachability('storage', 'Cloud Storage', 'https://storage.googleapis.com/', [400]),
-      reachability(
-        'gemini',
-        'Gemini API',
-        'https://generativelanguage.googleapis.com/v1beta/models',
-        [403],
-      ),
     ],
   },
   {
@@ -114,15 +108,12 @@ export const platforms: ServiceInput[] = [
     id: 'china',
     name: 'Mainland China',
     category: 'Regional',
-    description: 'Domestic sites and mirrors, to tell cross-border problems apart from local ones.',
+    description: 'Domestic sites, to tell cross-border problems apart from local ones.',
     targets: [
       site('baidu', 'Baidu', 'https://www.baidu.com/'),
       site('qq', 'QQ', 'https://www.qq.com/'),
       site('aliyun', 'Alibaba Cloud', 'https://www.aliyun.com/'),
       site('bilibili', 'bilibili', 'https://www.bilibili.com/'),
-      site('aliyun-mirror', 'Alibaba Cloud mirror', 'https://mirrors.aliyun.com/'),
-      site('tuna-mirror', 'TUNA mirror', 'https://mirrors.tuna.tsinghua.edu.cn/'),
-      site('npmmirror', 'npmmirror registry', 'https://registry.npmmirror.com/'),
     ],
   },
 ]
