@@ -7,9 +7,10 @@ measured from the machine it runs on.
 
 ![Netprobe's Connectivity page: latency baselines, captive-portal checks, and UDP/QUIC probes with per-phase timings](docs/images/netprobe.png)
 
-Open it in a browser, pick a category or a service,
-and press **Run**: the server you deployed it on measures reachability, latency, jitter, loss, and
-throughput to about 150 built-in targets and any endpoint you add.
+Open it in a browser, pick a category or a service, and press **Run**: the server you deployed it
+on measures reachability, latency, jitter, and loss to about 250 built-in targets (AI apps and
+APIs, GitHub, package and container registries, Linux and China mirrors, DNS, and more) and any
+endpoint you add, and shows which address each site saw the request come from.
 
 The browser only drives and displays. Every request is made by the server, so results describe
 the network path of the machine Netprobe runs on: a CI runner, a build host, a home server, or
@@ -28,9 +29,9 @@ an office gateway.
 - **How fast is the download path?** Optional (off by default, since every viewer could start
   one): a few small files on speed-test hosts, over one connection and over several range-split
   connections, reported in Mbps and MB/s with the bytes received.
-- **Does the exit matter?** Exits can be HTTP/SOCKS proxies, another network interface, or a
-  gateway such as a LAN side router (routed at the network layer, no proxy settings), and every
-  run records the public IP it left from.
+- **Does the exit matter?** Runs can go out through more than one exit: the system route, an
+  HTTP/SOCKS proxy, another network interface, or a gateway such as a LAN side router (routed at
+  the network layer, with no proxy settings). Every run records the public IP it left from.
 - **What is this machine's network setup?** The Host page shows the device, OS, interfaces,
   default routes, DNS servers, proxy settings, and flags tunnels and fake-IP DNS.
 - **Who does the internet think this host is?** The Egress page asks 16 independent services
@@ -56,6 +57,10 @@ an office gateway.
 | Regional       | Mainland China sites                                                                        |
 
 Each service can be run on its own from its group header, or a whole category from the toolbar.
+
+API endpoints are probed without credentials, so their healthy answer is a fixed error such as 401. Web apps behind Cloudflare's bot check (ChatGPT, Claude, Le Chat) answer 403 to every
+non-browser client, so they are probed through their own `/cdn-cgi/trace`, which crosses the
+same edge without the check.
 
 ### Probe types
 
@@ -84,6 +89,12 @@ Jitter is the mean absolute difference between consecutive round trips.
 | Failed       | No attempt got an HTTP response.                                                                                                                                          |
 
 Failed attempts are kept as they happened; there are no silent retries.
+
+The **Exit IP** column shows the address a site saw, with the country Cloudflare placed it in.
+It appears for every site behind Cloudflare: a response carrying `cf-ray` marks the site, and
+the server then reads that site's `/cdn-cgi/trace` once per run over the same exit. With a
+rule-based proxy (Clash, mihomo, Surge) each domain can leave through a different node, and this
+column shows which. Sites not behind Cloudflare show a dash.
 
 When remote addresses fall in `198.18.0.0/15`, a local proxy or TUN interface in fake-IP mode is
 answering DNS and terminating TCP. Netprobe flags this: DNS and TCP timings then describe the
@@ -138,8 +149,9 @@ pnpm start
 ```
 
 [`deploy/netprobe.service`](deploy/netprobe.service) is a systemd unit for running it as a
-service. On macOS, running natively is the way to measure exactly what the host sees: Docker
-Desktop and OrbStack run containers in a VM with its own NAT.
+service, and [`deploy/dev.netprobe.plist`](deploy/dev.netprobe.plist) a LaunchAgent for macOS.
+On macOS, running natively is the way to measure exactly what the host sees: Docker Desktop and
+OrbStack run containers in a VM with its own NAT.
 
 ### Behind a reverse proxy
 
@@ -193,6 +205,26 @@ services:
         check: reachability
 ```
 
+### Exits
+
+Exits are listed under `exits`; the first is the default, and each run can pick another.
+
+| Key                   | Traffic                                                                                       | Probes          |
+| --------------------- | --------------------------------------------------------------------------------------------- | --------------- |
+| _(none of the below)_ | The system route                                                                              | All             |
+| `proxy`               | Through an HTTP or SOCKS proxy; credentials are never shown or logged                         | HTTP only       |
+| `interface`           | Bound to a network interface, such as a WireGuard tunnel                                      | All (see below) |
+| `gateway`             | Through a gateway on a directly connected network, such as a side router running a proxy      | All (see below) |
+| `dns`                 | Optional with `interface` or `gateway`: resolve names through this server, over the same exit | —               |
+
+Interface and gateway exits work at the network layer, without proxy variables: in Docker the
+container sets up its own policy routing at start (it needs `NET_ADMIN` and its own network
+namespace), so only that exit's traffic takes the other path and the host's routing is
+untouched. [docs/deploy.md](docs/deploy.md#exits-through-another-interface-or-gateway) has a
+Compose example.
+
+### Modules
+
 | Module      | Turn off when                                                                       |
 | ----------- | ----------------------------------------------------------------------------------- |
 | `downloads` | Off by default. Turn on where viewers may spend about 50 MB per download run.       |
@@ -217,9 +249,12 @@ the page can trigger measurements but cannot make the server request arbitrary a
 
 ## Safety
 
-- One run at a time: runs started by several viewers wait in a queue and start in order. Downloads
-  run one target at a time with a per-request size cap, and the UI
-  shows the expected traffic before you start.
+- One run at a time: runs started by several viewers wait in a queue and start in order.
+- Throughput tests are off by default. When enabled they use three 10 MB files on speed-test
+  hosts, one target at a time with a per-request size cap, and the UI shows the expected traffic
+  before you start.
+- Quick runs only fetch small responses (HEAD where possible). The Exit IP lookup adds one
+  request of a few hundred bytes per Cloudflare-fronted host per run.
 - Proxy credentials and signed URL parameters are redacted before anything is stored, logged,
   or sent to the browser. Request logs contain only method, route, and status.
 - Cancelling a run kills its `curl` processes.
@@ -239,8 +274,9 @@ stalls, truncates bodies, and resets mid-transfer (`test/fault-server.ts`).
 
 ## Scope
 
-v0.1 covers quick diagnosis over HTTP and socket probes, download throughput, egress selection,
-live progress, history, and the Host page.
+v0.1 covers quick diagnosis over HTTP and socket probes, per-site exit addresses, optional
+download throughput, proxy and network-layer exits, live progress with a shared run queue,
+history, and the Host and Egress pages.
 Upload tests, scheduled background probing, stability runs, run-to-run comparison, and CSV
 export are planned. Apple notarization is covered at the network-path level; submitting,
 waiting for a verdict, and stapling need a macOS probe and are out of scope.
